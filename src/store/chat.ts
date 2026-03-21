@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatStoreState, Message, ToolInvocation } from "./types";
+import type { ChatStoreState, Message, MessagePart } from "./types";
 
 export const useChatStore = create<ChatStoreState>((set) => ({
   messages: [],
@@ -11,25 +11,24 @@ export const useChatStore = create<ChatStoreState>((set) => ({
       messages: [...state.messages, message],
     })),
 
-  updateMessage: (id: string, content: string) =>
+  appendPart: (messageId: string, part: MessagePart) =>
     set((state) => ({
       messages: state.messages.map((msg) =>
-        msg.id === id ? { ...msg, content } : msg,
+        msg.id === messageId ? { ...msg, parts: [...msg.parts, part] } : msg,
       ),
     })),
 
-  updateReasoning: (id: string, reasoning: string) =>
+  updateLastPart: (messageId: string, content: string) =>
     set((state) => ({
-      messages: state.messages.map((msg) =>
-        msg.id === id ? { ...msg, reasoning } : msg,
-      ),
-    })),
-
-  updateToolInvocations: (id: string, toolInvocations: ToolInvocation[]) =>
-    set((state) => ({
-      messages: state.messages.map((msg) =>
-        msg.id === id ? { ...msg, toolInvocations } : msg,
-      ),
+      messages: state.messages.map((msg) => {
+        if (msg.id !== messageId || msg.parts.length === 0) return msg;
+        const parts = [...msg.parts];
+        const last = parts[parts.length - 1];
+        if (last.type === "text" || last.type === "reasoning") {
+          parts[parts.length - 1] = { ...last, content };
+        }
+        return { ...msg, parts };
+      }),
     })),
 
   setStreaming: (isStreaming: boolean) => set({ isStreaming }),

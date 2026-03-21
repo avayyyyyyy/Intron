@@ -1,8 +1,10 @@
 import { streamText, stepCountIs, type TextStreamPart } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { useChatStore } from "@/store/chat";
-import { agentTools, type AgentTools } from "@/lib/tools";
-import type { Message, ToolInvocation } from "@/store/types";
+import { getToolsForModel, type AgentTools } from "@/lib/tools";
+import { getModelCapabilities } from "@/lib/models";
+import type { Message } from "@/store/types";
+import { getTextFromParts } from "@/store/types";
 
 interface UseStreamingChatOptions {
   apiKey: string;
@@ -47,14 +49,8 @@ function handleStreamEvent(
 }
 
 export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
-  const {
-    addMessage,
-    updateMessage,
-    updateReasoning,
-    updateToolInvocations,
-    setStreaming,
-    setError,
-  } = useChatStore();
+  const { addMessage, appendPart, updateLastPart, setStreaming, setError } =
+    useChatStore();
 
   const sendMessage = async (content: string) => {
     if (!apiKey) {
@@ -65,7 +61,7 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
-      content,
+      parts: [{ type: "text", content }],
       createdAt: new Date(),
     };
     addMessage(userMessage);
@@ -74,7 +70,7 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
     addMessage({
       id: assistantId,
       role: "assistant",
-      content: "",
+      parts: [],
       createdAt: new Date(),
     });
 
@@ -89,60 +85,74 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
         .messages.slice(0, -1)
         .map((m) => ({
           role: m.role as "user" | "assistant",
-          content: m.content,
+          content: getTextFromParts(m.parts),
         }));
+
+      const { vision } = getModelCapabilities(model);
+      const tools = getToolsForModel(vision);
 
       const result = streamText({
         model: openrouter.chat(model),
         system:
           "You are Pavo, a helpful AI assistant in a Chrome extension. Provide clear, concise responses. You have access to tools — use them when relevant.",
         messages: coreMessages,
-        tools: agentTools,
+        tools,
         stopWhen: stepCountIs(3),
-        providerOptions: {
-          openrouter: {
-            reasoning: {
-              max_tokens: 1500,
-            },
-          },
-        },
       });
 
-      let accumulated = "";
+      let currentPartType: "text" | "reasoning" | "tool-call" | "tool-result" | null = null;
+      let accumulatedText = "";
       let accumulatedReasoning = "";
-      const toolInvocations: ToolInvocation[] = [];
 
       for await (const event of result.fullStream) {
         handleStreamEvent(event, {
           onTextDelta(text) {
-            accumulated += text;
-            updateMessage(assistantId, accumulated);
+            if (currentPartType !== "text") {
+              currentPartType = "text";
+              accumulatedText = text;
+              appendPart(assistantId, { type: "text", content: text });
+            } else {
+              accumulatedText += text;
+              updateLastPart(assistantId, accumulatedText);
+            }
           },
           onReasoningDelta(text) {
-            accumulatedReasoning += text;
-            updateReasoning(assistantId, accumulatedReasoning);
+            if (currentPartType !== "reasoning") {
+              currentPartType = "reasoning";
+              accumulatedReasoning = text;
+              appendPart(assistantId, { type: "reasoning", content: text });
+            } else {
+              accumulatedReasoning += text;
+              updateLastPart(assistantId, accumulatedReasoning);
+            }
           },
           onToolCall(toolCallId, toolName, input) {
-            toolInvocations.push({
+            currentPartType = "tool-call";
+            appendPart(assistantId, {
+              type: "tool-call",
               toolCallId,
               toolName,
               args: input as Record<string, unknown>,
-              state: "call",
             });
-            updateToolInvocations(assistantId, [...toolInvocations]);
           },
           onToolResult(toolCallId, output) {
-            const idx = toolInvocations.findIndex(
-              (t) => t.toolCallId === toolCallId,
+            currentPartType = "tool-result";
+            const msg = useChatStore
+              .getState()
+              .messages.find((m) => m.id === assistantId);
+            const callPart = msg?.parts.find(
+              (p) => p.type === "tool-call" && p.toolCallId === toolCallId,
             );
-            if (idx !== -1) {
-              toolInvocations[idx] = {
-                ...toolInvocations[idx],
-                state: "result",
-                result: output,
-              };
-              updateToolInvocations(assistantId, [...toolInvocations]);
-            }
+            const toolName =
+              callPart && "toolName" in callPart
+                ? callPart.toolName
+                : "unknown";
+            appendPart(assistantId, {
+              type: "tool-result",
+              toolCallId,
+              toolName,
+              result: output,
+            });
           },
           onError(error) {
             setError(String(error));

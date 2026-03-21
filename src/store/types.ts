@@ -1,24 +1,23 @@
-export type ToolInvocation =
+export type MessagePart =
+  | { type: "reasoning"; content: string }
+  | { type: "text"; content: string }
   | {
+      type: "tool-call";
       toolCallId: string;
       toolName: string;
       args: Record<string, unknown>;
-      state: "call";
     }
   | {
+      type: "tool-result";
       toolCallId: string;
       toolName: string;
-      args: Record<string, unknown>;
-      state: "result";
       result: unknown;
     };
 
 export interface Message {
   id: string;
   role: "user" | "assistant";
-  content: string;
-  reasoning?: string;
-  toolInvocations?: ToolInvocation[];
+  parts: MessagePart[];
   createdAt: Date;
 }
 
@@ -27,13 +26,18 @@ export interface ChatStoreState {
   isStreaming: boolean;
   error: string | null;
   addMessage: (message: Message) => void;
-  updateMessage: (id: string, content: string) => void;
-  updateReasoning: (id: string, reasoning: string) => void;
-  updateToolInvocations: (
-    id: string,
-    toolInvocations: ToolInvocation[],
-  ) => void;
+  appendPart: (messageId: string, part: MessagePart) => void;
+  updateLastPart: (messageId: string, content: string) => void;
   setStreaming: (isStreaming: boolean) => void;
   setError: (error: string | null) => void;
   clearMessages: () => void;
+}
+
+export function getTextFromParts(parts: MessagePart[]): string {
+  return parts
+    .filter(
+      (p): p is Extract<MessagePart, { type: "text" }> => p.type === "text",
+    )
+    .map((p) => p.content)
+    .join("\n\n");
 }

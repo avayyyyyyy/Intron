@@ -30,7 +30,7 @@ export function ChatView({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages.length]);
 
   return (
     <div className="sidepanel">
@@ -92,11 +92,9 @@ export function ChatView({
                   />
                 );
               })}
-              {isStreaming &&
-                !messages[messages.length - 1]?.content.trim() &&
-                !messages[messages.length - 1]?.reasoning?.trim() && (
-                  <StreamingIndicator />
-                )}
+              {isStreaming && !messages[messages.length - 1]?.parts.length && (
+                <StreamingIndicator />
+              )}
             </>
           )}
           <div ref={messagesEndRef} />

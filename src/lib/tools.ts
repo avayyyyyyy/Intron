@@ -35,3 +35,17 @@ export const agentTools = {
 };
 
 export type AgentTools = typeof agentTools;
+export type ToolName = keyof AgentTools;
+
+/** Tool display metadata — co-located with definitions to stay in sync */
+export const TOOL_META: Record<ToolName, { label: string; iconName: string }> = {
+  getTime: { label: "Current time", iconName: "Clock" },
+  getScreenshot: { label: "Screenshot", iconName: "Camera" },
+  getPageContent: { label: "Page content", iconName: "Globe" },
+};
+
+const { getScreenshot: _, ...toolsWithoutScreenshot } = agentTools;
+
+export function getToolsForModel(vision: boolean) {
+  return vision ? agentTools : toolsWithoutScreenshot;
+}
