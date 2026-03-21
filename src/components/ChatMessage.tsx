@@ -15,6 +15,17 @@ function formatToolResult(result: unknown): string {
   return JSON.stringify(result, null, 2);
 }
 
+function isScreenshotResult(
+  result: unknown,
+): result is { imageDataUrl: string } {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    "imageDataUrl" in result &&
+    typeof (result as Record<string, unknown>).imageDataUrl === "string"
+  );
+}
+
 export function ChatMessage({
   message,
   isActivelyStreaming = false,
@@ -92,9 +103,17 @@ export function ChatMessage({
             </span>
           </div>
           {invocation.state === "result" && (
-            <pre className="tool-result">
-              {formatToolResult(invocation.result)}
-            </pre>
+            <div className="tool-result">
+              {isScreenshotResult(invocation.result) ? (
+                <img
+                  src={invocation.result.imageDataUrl}
+                  alt="Screenshot"
+                  className="tool-screenshot"
+                />
+              ) : (
+                <pre>{formatToolResult(invocation.result)}</pre>
+              )}
+            </div>
           )}
         </div>
       ))}
