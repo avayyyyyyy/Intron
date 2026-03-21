@@ -810,6 +810,37 @@ body {
   margin-left: 2px;
 }
 
+.message-content a {
+  color: var(--color-accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 120ms ease;
+}
+
+.message-content a:hover {
+  border-bottom-color: var(--color-accent);
+}
+
+.citation {
+  margin-top: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: rgba(45, 212, 191, 0.06);
+  border-left: 2px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs);
+  color: var(--color-fg-muted);
+}
+
+.citation a {
+  color: var(--color-accent);
+  text-decoration: none;
+  font-family: var(--font-mono);
+}
+
+.citation a:hover {
+  text-decoration: underline;
+}
+
 .tool-card {
   margin: var(--space-2) 0;
   padding: var(--space-2) var(--space-3);

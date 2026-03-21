@@ -62,6 +62,9 @@ const markdownComponents = {
       </pre>
     );
   },
+  citations: ({ children }: { children?: React.ReactNode }) => (
+    <div className="citation">{children}</div>
+  ),
 };
 
 function ToolCard({
@@ -245,7 +248,7 @@ export function ChatMessage({
         }
       })}
 
-      {hasContent && (
+      {hasContent && !isActivelyStreaming && (
         <button
           className="copy-btn"
           onClick={handleCopy}
