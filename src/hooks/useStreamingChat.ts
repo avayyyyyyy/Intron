@@ -1,8 +1,7 @@
-import { streamText, stepCountIs, type TextStreamPart } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { type TextStreamPart } from "ai";
 import { useChatStore } from "@/store/chat";
-import { getToolsForModel, type AgentTools } from "@/lib/tools";
-import { getModelCapabilities } from "@/lib/models";
+import { type AgentTools } from "@/lib/tools";
+import { createAgent } from "@/lib/agent";
 import type { Message } from "@/store/types";
 import { getTextFromParts } from "@/store/types";
 
@@ -78,7 +77,7 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
     setError(null);
 
     try {
-      const openrouter = createOpenRouter({ apiKey });
+      const agent = createAgent(apiKey, model);
 
       const coreMessages = useChatStore
         .getState()
@@ -88,19 +87,16 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
           content: getTextFromParts(m.parts),
         }));
 
-      const { vision } = getModelCapabilities(model);
-      const tools = getToolsForModel(vision);
-
-      const result = streamText({
-        model: openrouter.chat(model),
-        system:
-          "You are Pavo, a helpful AI assistant in a Chrome extension. Provide clear, concise responses. You have access to tools — use them when relevant.",
+      const result = await agent.stream({
         messages: coreMessages,
-        tools,
-        stopWhen: stepCountIs(3),
       });
 
-      let currentPartType: "text" | "reasoning" | "tool-call" | "tool-result" | null = null;
+      let currentPartType:
+        | "text"
+        | "reasoning"
+        | "tool-call"
+        | "tool-result"
+        | null = null;
       let accumulatedText = "";
       let accumulatedReasoning = "";
 
