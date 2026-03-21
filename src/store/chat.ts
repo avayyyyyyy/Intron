@@ -31,6 +31,20 @@ export const useChatStore = create<ChatStoreState>((set) => ({
       }),
     })),
 
+  replacePart: (messageId: string, toolCallId: string, part: MessagePart) =>
+    set((state) => ({
+      messages: state.messages.map((msg) =>
+        msg.id === messageId
+          ? {
+              ...msg,
+              parts: msg.parts.map((p) =>
+                "toolCallId" in p && p.toolCallId === toolCallId ? part : p,
+              ),
+            }
+          : msg,
+      ),
+    })),
+
   setStreaming: (isStreaming: boolean) => set({ isStreaming }),
 
   setError: (error: string | null) => set({ error }),

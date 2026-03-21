@@ -12,6 +12,12 @@ export type MessagePart =
       toolCallId: string;
       toolName: string;
       result: unknown;
+    }
+  | {
+      type: "tool-error";
+      toolCallId: string;
+      toolName: string;
+      error: string;
     };
 
 export interface Message {
@@ -28,6 +34,7 @@ export interface ChatStoreState {
   addMessage: (message: Message) => void;
   appendPart: (messageId: string, part: MessagePart) => void;
   updateLastPart: (messageId: string, content: string) => void;
+  replacePart: (messageId: string, toolCallId: string, part: MessagePart) => void;
   setStreaming: (isStreaming: boolean) => void;
   setError: (error: string | null) => void;
   clearMessages: () => void;

@@ -2,6 +2,7 @@ import { type TextStreamPart } from "ai";
 import { useChatStore } from "@/store/chat";
 import { type AgentTools } from "@/lib/tools";
 import { createAgent } from "@/lib/agent";
+import { sendToBackground } from "@/lib/messaging";
 import type { Message } from "@/store/types";
 import { getTextFromParts } from "@/store/types";
 
@@ -16,7 +17,8 @@ interface StreamEventHandlers {
   onTextDelta: (text: string) => void;
   onReasoningDelta: (text: string) => void;
   onToolCall: (toolCallId: string, toolName: string, input: unknown) => void;
-  onToolResult: (toolCallId: string, output: unknown) => void;
+  onToolResult: (toolCallId: string, toolName: string, output: unknown) => void;
+  onToolError: (toolCallId: string, toolName: string, error: unknown) => void;
   onError: (error: unknown) => void;
 }
 
@@ -38,7 +40,11 @@ function handleStreamEvent(
       break;
 
     case "tool-result":
-      handlers.onToolResult(event.toolCallId, event.output);
+      handlers.onToolResult(event.toolCallId, event.toolName, event.output);
+      break;
+
+    case "tool-error":
+      handlers.onToolError(event.toolCallId, event.toolName, event.error);
       break;
 
     case "error":
@@ -48,8 +54,14 @@ function handleStreamEvent(
 }
 
 export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
-  const { addMessage, appendPart, updateLastPart, setStreaming, setError } =
-    useChatStore();
+  const {
+    addMessage,
+    appendPart,
+    updateLastPart,
+    replacePart,
+    setStreaming,
+    setError,
+  } = useChatStore();
 
   const sendMessage = async (content: string) => {
     if (!apiKey) {
@@ -77,7 +89,15 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
     setError(null);
 
     try {
-      const agent = createAgent(apiKey, model);
+      let pageContext: { url: string; title: string } | undefined;
+      try {
+        const content = await sendToBackground("GET_PAGE_CONTENT");
+        pageContext = { url: content.url, title: content.title };
+      } catch {
+        // Page context unavailable (e.g., chrome:// page)
+      }
+
+      const agent = createAgent(apiKey, model, pageContext);
 
       const coreMessages = useChatStore
         .getState()
@@ -96,6 +116,7 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
         | "reasoning"
         | "tool-call"
         | "tool-result"
+        | "tool-error"
         | null = null;
       let accumulatedText = "";
       let accumulatedReasoning = "";
@@ -131,18 +152,8 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
               args: input as Record<string, unknown>,
             });
           },
-          onToolResult(toolCallId, output) {
+          onToolResult(toolCallId, toolName, output) {
             currentPartType = "tool-result";
-            const msg = useChatStore
-              .getState()
-              .messages.find((m) => m.id === assistantId);
-            const callPart = msg?.parts.find(
-              (p) => p.type === "tool-call" && p.toolCallId === toolCallId,
-            );
-            const toolName =
-              callPart && "toolName" in callPart
-                ? callPart.toolName
-                : "unknown";
             appendPart(assistantId, {
               type: "tool-result",
               toolCallId,
@@ -152,6 +163,15 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
           },
           onError(error) {
             setError(String(error));
+          },
+          onToolError(toolCallId, toolName, error) {
+            currentPartType = "tool-error";
+            replacePart(assistantId, toolCallId, {
+              type: "tool-error",
+              toolCallId,
+              toolName: toolName ?? "unknown",
+              error: String(error),
+            });
           },
         });
       }

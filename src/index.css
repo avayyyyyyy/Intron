@@ -403,15 +403,6 @@ body {
   padding: 0;
 }
 
-.message-content a {
-  color: var(--color-accent);
-  text-decoration: none;
-}
-
-.message-content a:hover {
-  text-decoration: underline;
-}
-
 .message-content hr {
   border: none;
   border-top: 1px solid var(--color-border);
@@ -842,33 +833,18 @@ body {
 }
 
 .tool-card {
-  margin: var(--space-2) 0;
-  padding: var(--space-2) var(--space-3);
-  background: rgba(45, 212, 191, 0.06);
-  border: 1px solid var(--color-border);
-  border-left: 2px solid var(--color-accent);
-  border-radius: var(--radius-sm);
+  padding: var(--space-1) 0 var(--space-1) var(--space-3);
+  margin: var(--space-1) 0;
+  border-left: 1px solid var(--color-border);
   font-size: var(--text-xs);
 }
 
-.tool-card.shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(45, 212, 191, 0.04) 0%,
-    rgba(45, 212, 191, 0.12) 50%,
-    rgba(45, 212, 191, 0.04) 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+.tool-card.running {
+  border-left-color: var(--color-accent);
 }
 
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
+.tool-card.error {
+  border-left-color: var(--color-destructive);
 }
 
 .tool-card-header {
@@ -882,7 +858,14 @@ body {
   width: 12px;
   height: 12px;
   flex-shrink: 0;
+}
+
+.tool-card.running .tool-card-header svg {
   color: var(--color-accent);
+}
+
+.tool-card.error .tool-card-header svg {
+  color: var(--color-destructive);
 }
 
 .tool-label {
@@ -894,7 +877,15 @@ body {
   margin-left: auto;
   font-size: var(--text-2xs);
   opacity: 0.5;
+}
+
+.tool-card.running .tool-state {
   animation: pulse 1.5s ease-in-out infinite;
+}
+
+.tool-state.error {
+  color: var(--color-destructive);
+  opacity: 1;
 }
 
 @keyframes pulse {
@@ -908,9 +899,33 @@ body {
 }
 
 .tool-text {
-  margin-top: var(--space-2);
+  margin-top: var(--space-1);
   font-size: var(--text-2xs);
   color: var(--color-fg-muted);
+  line-height: 1.5;
+}
+
+.tool-text.muted {
+  opacity: 0.5;
+}
+
+.tool-element,
+.tool-link,
+.tool-tab,
+.tool-item {
+  padding: 1px 0;
+  font-size: var(--text-2xs);
+  color: var(--color-fg-muted);
+}
+
+.tool-element-tag {
+  font-family: var(--font-mono);
+  color: var(--color-accent);
+  opacity: 0.8;
+}
+
+.tool-tab.active {
+  color: var(--color-fg);
 }
 
 .tool-called {
@@ -936,6 +951,13 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tool-error-text {
+  margin-top: var(--space-1);
+  font-size: var(--text-2xs);
+  color: var(--color-destructive);
+  opacity: 0.8;
 }
 
 .tool-screenshot {
