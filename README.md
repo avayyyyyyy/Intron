@@ -1,4 +1,4 @@
-# Pavo
+# Intron
 
 AI chat assistant in a Chrome side panel. Streaming responses, reasoning, tool calling — powered by OpenRouter and the Vercel AI SDK.
 
