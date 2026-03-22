@@ -19,6 +19,12 @@ export const OPENROUTER_MODELS: OpenRouterModel[] = [
     vision: false,
   },
   {
+    id: "openai/gpt-oss-120b",
+    name: "OpenAI GPT OSS 120B",
+    description: "OpenAI latest 120B model",
+    vision: false,
+  },
+  {
     id: "minimax/minimax-m2.5",
     name: "MiniMax M2.5",
     description: "MiniMax efficient",

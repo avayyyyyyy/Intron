@@ -26,10 +26,7 @@ import {
   Timer,
   Database,
   Terminal,
-  LayoutGrid,
   Plus,
-  ArrowLeftRight,
-  X,
 } from "lucide-react";
 import type { Message, MessagePart } from "@/store/types";
 import { getTextFromParts } from "@/store/types";
@@ -61,10 +58,7 @@ const TOOL_ICONS: Record<string, typeof Clock> = {
   Timer,
   Database,
   Terminal,
-  LayoutGrid,
   Plus,
-  ArrowLeftRight,
-  X,
 };
 
 function getToolIcon(toolName: string): typeof Clock {
@@ -259,24 +253,6 @@ function ToolResultContent({
     );
   }
 
-  if (toolName === "getTabsList" && hasKey(result, "tabs")) {
-    const tabs = (result as { tabs: Array<{ title: string; active: boolean }> })
-      .tabs;
-    return (
-      <div className="tool-text">
-        {tabs.slice(0, 5).map((t, i) => (
-          <div key={i} className={t.active ? "tool-tab active" : "tool-tab"}>
-            {t.active ? "→ " : "  "}
-            {t.title || "Untitled"}
-          </div>
-        ))}
-        {tabs.length > 5 && (
-          <span className="muted">+{tabs.length - 5} more tabs</span>
-        )}
-      </div>
-    );
-  }
-
   if (toolName === "extractData" && hasKey(result, "items")) {
     const items = (result as { items: Array<{ text?: string }>; count: number })
       .items;
@@ -306,14 +282,6 @@ function ToolResultContent({
 
   if (toolName === "openTab" && hasStringKeys(result, "url")) {
     return <div className="tool-text">Opened {result.url}</div>;
-  }
-
-  if (toolName === "closeTab") {
-    return <div className="tool-text">Tab closed</div>;
-  }
-
-  if (toolName === "switchTab") {
-    return <div className="tool-text">Switched tab</div>;
   }
 
   if (typeof result === "string") {
@@ -421,9 +389,13 @@ export function ChatMessage({
                   <span>{isStreaming ? "Thinking..." : "Thinking"}</span>
                   <ChevronRight className="chevron" />
                 </button>
-                <div className={`reasoning-content ${isOpen ? "visible" : ""}`}>
-                  {part.content}
-                  {isStreaming && <span className="streaming-cursor" />}
+                <div className={`reasoning-wrapper ${isOpen ? "visible" : ""}`}>
+                  <div className="reasoning-inner">
+                    <div className="reasoning-content">
+                      {part.content}
+                      {isStreaming && <span className="streaming-cursor" />}
+                    </div>
+                  </div>
                 </div>
               </div>
             );
