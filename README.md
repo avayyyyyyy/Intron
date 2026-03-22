@@ -2,7 +2,7 @@
 
 AI chat assistant in a Chrome side panel. Streaming responses, reasoning, tool calling — powered by OpenRouter and the Vercel AI SDK.
 
-<img width="1800" height="948" alt="image" src="https://github.com/user-attachments/assets/eb83c5de-65fa-4f64-afaa-308d099a2533" />
+<img width="1800" height="947" alt="image" src="https://github.com/user-attachments/assets/c7d7969c-fa5a-4b41-9188-beb00d11c0f1" />
 
 ## Features
 
