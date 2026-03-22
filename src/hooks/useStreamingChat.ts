@@ -134,6 +134,7 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
         | null = null;
       let accumulatedText = "";
       let accumulatedReasoning = "";
+      let hasGrouped = false;
 
       for await (const event of result.fullStream) {
         if (controller.signal.aborted) break;
@@ -160,6 +161,10 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
             }
           },
           onToolCall(toolCallId, toolName, input) {
+            if (!hasGrouped) {
+              hasGrouped = true;
+              sendToBackground("FIND_OR_CREATE_PAVO_GROUP").catch(() => {});
+            }
             currentPartType = "tool-call";
             appendPart(assistantId, {
               type: "tool-call",

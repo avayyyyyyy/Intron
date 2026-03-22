@@ -143,6 +143,14 @@ export interface BackgroundMessages {
     payload: { tabId?: number };
     response: { success: boolean };
   };
+  FIND_OR_CREATE_PAVO_GROUP: {
+    payload: Record<string, never>;
+    response: { groupId: number; created: boolean };
+  };
+  REMOVE_FROM_PAVO_GROUP: {
+    payload: { tabId?: number };
+    response: { success: boolean };
+  };
 }
 
 export function sendToBackground<T extends MessageType>(

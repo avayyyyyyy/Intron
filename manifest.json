@@ -3,7 +3,7 @@
   "name": "Pavo AI — Sidepanel Agent That Browses and Acts for You",
   "version": "1.0.0",
   "description": "AI-powered browser agent with streaming chat interface",
-  "permissions": ["sidePanel", "storage", "activeTab", "scripting", "commands"],
+  "permissions": ["sidePanel", "storage", "activeTab", "scripting", "commands", "tabGroups"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"

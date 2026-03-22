@@ -1,8 +1,45 @@
-// background.ts — MV3 service worker
-// Fixed: getActiveTab uses lastFocusedWindow, SCROLL_PAGE finds real overflow container
+const PANEL_PATH = "sidepanel.html";
 
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-chrome.sidePanel.setOptions({ path: "sidepanel.html", enabled: true });
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+chrome.sidePanel.setOptions({ path: PANEL_PATH, enabled: false });
+
+let activePavoGroupId: number | null = null;
+
+async function ensurePavoGroup(tab: chrome.tabs.Tab): Promise<number> {
+  // Already in a Pavo group — keep it
+  if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
+    try {
+      const group = await chrome.tabGroups.get(tab.groupId);
+      if (group.title === "Pavo") return group.id;
+    } catch {
+      /* group deleted */
+    }
+  }
+  // Always create a new group — each session gets its own Pavo group (1 tab each)
+  const groupId = await chrome.tabs.group({
+    tabIds: tab.id!,
+    createProperties: { windowId: tab.windowId },
+  });
+  await chrome.tabGroups.update(groupId, {
+    title: "Pavo",
+    color: "cyan",
+    collapsed: false,
+  });
+  return groupId;
+}
+
+chrome.action.onClicked.addListener(async (tab) => {
+  if (!tab.id || !tab.url || tab.url.startsWith("chrome://")) return;
+  try {
+    // Fire-and-forget setOptions (no await) — keeps open() in gesture context
+    chrome.sidePanel.setOptions({ tabId: tab.id, path: PANEL_PATH, enabled: true });
+    // First await MUST be open() — Chrome requires user gesture on first async boundary
+    await chrome.sidePanel.open({ tabId: tab.id });
+    activePavoGroupId = await ensurePavoGroup(tab);
+  } catch (err) {
+    console.error("[Pavo] Failed to open sidepanel:", err);
+  }
+});
 
 // ─── Tab State Cache ──────────────────────────────────────────────────────────
 
@@ -28,9 +65,34 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   }
 });
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.url || changeInfo.status === "complete") {
     cacheTabState(tabId, tab.url || null);
+  }
+  // Track group membership changes — enable/disable sidepanel accordingly
+  if ("groupId" in changeInfo) {
+    if (changeInfo.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE) {
+      // Tab left its group — disable sidepanel
+      await chrome.sidePanel.setOptions({
+        tabId,
+        path: PANEL_PATH,
+        enabled: false,
+      });
+    } else {
+      // Tab joined a group — check if it's the Pavo group
+      try {
+        const group = await chrome.tabGroups.get(changeInfo.groupId!);
+        if (group.title === "Pavo") {
+          await chrome.sidePanel.setOptions({
+            tabId,
+            path: PANEL_PATH,
+            enabled: true,
+          });
+        }
+      } catch {
+        // Group may have been deleted between events
+      }
+    }
   }
 });
 
@@ -42,22 +104,23 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getActiveTab(): Promise<chrome.tabs.Tab> {
-  // FIX: Use lastFocusedWindow instead of currentWindow.
-  //
-  // In MV3 service workers, `currentWindow: true` is documented to fall back
-  // to the last active window — but in practice it can resolve to the extension's
-  // OWN side-panel window (which has no tabs), making executeScript silently fail.
-  //
-  // `lastFocusedWindow: true` always targets the browser window the user is
-  // actually looking at, which is what we want for every tool call.
-  //
-  // Ref: https://stackoverflow.com/a/77113225
   const [tab] = await chrome.tabs.query({
     active: true,
     lastFocusedWindow: true,
   });
   if (!tab?.id) throw new Error("No active tab found");
   return tab;
+}
+
+async function getPavoTab(): Promise<chrome.tabs.Tab | null> {
+  if (activePavoGroupId === null) return null;
+  try {
+    const tabs = await chrome.tabs.query({ groupId: activePavoGroupId });
+    return tabs[0] ?? null;
+  } catch {
+    activePavoGroupId = null;
+    return null;
+  }
 }
 
 function injectScript<T>(
@@ -96,7 +159,7 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
   },
 
   async NAVIGATE_TO({ url }: { url: string }) {
-    const tab = await getActiveTab();
+    const tab = (await getPavoTab()) ?? (await getActiveTab());
     await chrome.tabs.update(tab.id!, { url });
     await new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
@@ -866,6 +929,25 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     } else {
       const tab = await getActiveTab();
       await chrome.tabs.remove(tab.id!);
+    }
+    return { success: true };
+  },
+
+  async FIND_OR_CREATE_PAVO_GROUP() {
+    const tab = await getActiveTab();
+    await chrome.sidePanel.setOptions({
+      tabId: tab.id!,
+      path: PANEL_PATH,
+      enabled: true,
+    });
+    activePavoGroupId = await ensurePavoGroup(tab);
+    return { groupId: activePavoGroupId, created: false };
+  },
+
+  async REMOVE_FROM_PAVO_GROUP({ tabId }: { tabId?: number }) {
+    const tab = tabId ? await chrome.tabs.get(tabId) : await getActiveTab();
+    if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
+      await chrome.tabs.ungroup(tab.id!);
     }
     return { success: true };
   },

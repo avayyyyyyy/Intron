@@ -514,6 +514,89 @@ The `default_path` in the manifest and the `path` in `setOptions` both point to 
 
 ---
 
+## 10. Tab Groups + Sidepanel Integration (Implemented)
+
+### What we built
+
+When the user clicks the extension icon or the agent calls a tool, the active tab is added to a **"Pavo" tab group** (cyan color). The sidepanel is only enabled on tabs inside a Pavo group — switching to an ungrouped tab hides the sidepanel.
+
+### Architecture
+
+```
+User clicks icon
+  → setOptions({ tabId, enabled: true })    // fire-and-forget, NO await
+  → await sidePanel.open({ tabId })          // first await = gesture context preserved
+  → await ensurePavoGroup(tab)               // creates cyan "Pavo" group
+
+Agent calls a tool
+  → FIND_OR_CREATE_PAVO_GROUP message
+  → enables sidepanel + groups tab
+
+User switches to ungrouped tab
+  → tabs.onUpdated detects groupId change
+  → setOptions({ tabId, enabled: false })
+  → sidepanel disappears
+
+User switches back to Pavo tab
+  → sidepanel reappears
+```
+
+### Critical: `sidePanel.open()` gesture context
+
+`chrome.sidePanel.open()` **must be the first `await`** in an `action.onClicked` handler. Chrome's user gesture context survives through the first async boundary but not subsequent ones.
+
+```ts
+// WRONG — kills gesture context
+await chrome.sidePanel.setOptions({ tabId, enabled: true });
+await chrome.sidePanel.open({ tabId });  // ❌ "may only be called in response to a user gesture"
+
+// CORRECT — setOptions fire-and-forget, open() is first await
+chrome.sidePanel.setOptions({ tabId, enabled: true });  // no await
+await chrome.sidePanel.open({ tabId });                  // ✅ first await = gesture intact
+```
+
+### Permissions required
+
+```json
+"permissions": ["sidePanel", "tabGroups", ...]
+```
+
+### Tab group behavior
+
+- **Each click = new group**: clicking the icon on a new tab creates a separate Pavo group (1 tab per group)
+- **Already in Pavo group**: reuses existing group
+- **Multiple Pavo groups coexist**: each sidepanel session tracks its own via `activePavoGroupId`
+- **`navigateTo` targets the Pavo tab**: `getPavoTab()` finds the tab in this session's group, navigates there without stealing focus
+- **Tab leaves group → sidepanel disables**: `tabs.onUpdated` listens for `groupId` changes
+
+### Key helper: `ensurePavoGroup(tab)`
+
+```ts
+async function ensurePavoGroup(tab: chrome.tabs.Tab): Promise<number> {
+  // If already in a Pavo group, return it
+  if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
+    const group = await chrome.tabGroups.get(tab.groupId);
+    if (group.title === "Pavo") return group.id;
+  }
+  // Create new group (1 tab each, multiple groups can coexist)
+  const groupId = await chrome.tabs.group({
+    tabIds: tab.id!,
+    createProperties: { windowId: tab.windowId },
+  });
+  await chrome.tabGroups.update(groupId, { title: "Pavo", color: "cyan" });
+  return groupId;
+}
+```
+
+### Chrome tab group API gotchas
+
+- `chrome.tabGroups.onUpdated` fires on title/color changes but NOT on membership changes — use `chrome.tabs.onUpdated` with `"groupId" in changeInfo` to detect when tabs join/leave groups
+- Empty groups are auto-deleted by Chrome
+- Group colors are limited to: grey, blue, red, yellow, green, pink, purple, cyan, orange
+- `chrome.tabGroups.TAB_GROUP_ID_NONE` (-1) means the tab is not in any group
+
+---
+
 ## References
 
 - [Chrome Side Panel API — Chrome for Developers](https://developer.chrome.com/docs/extensions/reference/api/sidePanel)
