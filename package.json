@@ -1,40 +1,11 @@
 {
   "name": "intron",
   "private": true,
-  "version": "1.0.0",
-  "type": "module",
+  "workspaces": ["apps/*"],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build && cp manifest.json dist/ && cp dist/assets/background-*.js dist/background.js && mkdir -p dist/icons && cp icons/*.png dist/icons/",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@fontsource-variable/geist": "^5.2.8",
-    "@fontsource-variable/geist-mono": "^5.2.7",
-    "@openrouter/ai-sdk-provider": "^2.3.3",
-    "@radix-ui/react-slot": "^1.2.4",
-    "ai": "^6.0.134",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.577.0",
-    "motion": "^12.38.0",
-    "radix-ui": "^1.4.3",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1",
-    "tailwind-merge": "^3.5.0",
-    "zod": "^4.3.6",
-    "zustand": "^5.0.12"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.2.2",
-    "@types/chrome": "^0.1.38",
-    "@types/node": "^25.5.0",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.4",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.5"
+    "dev:ext": "bun --filter extension dev",
+    "dev:web": "bun --filter website dev",
+    "build:ext": "bun --filter extension build",
+    "build:web": "bun --filter website build"
   }
 }

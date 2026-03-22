@@ -3,6 +3,8 @@ node_modules/
 
 # Build output
 dist/
+apps/extension/dist/
+apps/website/.next/
 
 # Environment variables
 .env
