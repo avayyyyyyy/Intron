@@ -192,6 +192,6 @@ export function createAgent(
     model: openrouter.chat(model),
     instructions,
     tools,
-    stopWhen: stepCountIs(30),
+    stopWhen: stepCountIs(60),
   });
 }

@@ -1,89 +1,42 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import {
-  Brain,
-  ChevronRight,
-  Copy,
-  Check,
-  Clock,
-  Globe,
-  Camera,
-  Navigation,
-  ArrowLeft,
-  ArrowRight,
-  RefreshCw,
-  MousePointer,
-  Type,
-  Command,
-  MoveVertical,
-  MousePointer2,
-  ListChecks,
-  ClipboardList,
-  LayoutDashboard,
-  Info,
-  Link,
-  Timer,
-  Database,
-  Terminal,
-  Plus,
-} from "lucide-react";
+import { Brain, ChevronRight, Copy, Check } from "lucide-react";
 import type { Message, MessagePart } from "@/store/types";
 import { getTextFromParts } from "@/store/types";
-import { TOOL_META, type ToolName } from "@/lib/tools";
 
 interface ChatMessageProps {
   message: Message;
   isActivelyStreaming?: boolean;
 }
 
-const TOOL_ICONS: Record<string, typeof Clock> = {
-  Clock,
-  Camera,
-  Globe,
-  Navigation,
-  ArrowLeft,
-  ArrowRight,
-  RefreshCw,
-  MousePointer,
-  Type,
-  Command,
-  MoveVertical,
-  MousePointer2,
-  ListChecks,
-  ClipboardList,
-  LayoutDashboard,
-  Info,
-  Link,
-  Timer,
-  Database,
-  Terminal,
-  Plus,
+const TOOL_LABELS: Record<string, [running: string, done: string]> = {
+  getScreenshot: ["Taking screenshot", "Screenshot captured"],
+  getPageContent: ["Extracting page content", "Page content extracted"],
+  navigateTo: ["Navigating", "Navigated"],
+  goBack: ["Going back", "Went back"],
+  goForward: ["Going forward", "Went forward"],
+  reloadPage: ["Reloading page", "Page reloaded"],
+  clickElement: ["Clicking element", "Clicked"],
+  typeText: ["Typing text", "Typed"],
+  pressKey: ["Pressing key", "Key pressed"],
+  scrollPage: ["Scrolling the page", "Scrolled"],
+  hoverElement: ["Hovering over element", "Hovered"],
+  selectOption: ["Selecting option", "Selected"],
+  fillForm: ["Filling form", "Form filled"],
+  getPageStructure: ["Scanning page structure", "Page scanned"],
+  getElementInfo: ["Inspecting element", "Element inspected"],
+  getPageLinks: ["Collecting page links", "Links collected"],
+  waitForElement: ["Waiting for element", "Element found"],
+  extractData: ["Extracting data", "Data extracted"],
+  executeScript: ["Running script", "Script executed"],
+  openTab: ["Opening new tab", "Tab opened"],
 };
 
-function getToolIcon(toolName: string): typeof Clock {
-  const meta = toolName in TOOL_META ? TOOL_META[toolName as ToolName] : null;
-  return meta ? (TOOL_ICONS[meta.iconName] ?? Globe) : Globe;
-}
-
-function getToolLabel(toolName: string): string {
-  return toolName in TOOL_META
-    ? TOOL_META[toolName as ToolName].label
-    : toolName;
-}
-
-function hasStringKeys<K extends string>(
-  obj: unknown,
-  ...keys: K[]
-): obj is Record<K, string> {
-  return (
-    typeof obj === "object" &&
-    obj !== null &&
-    keys.every(
-      (k) =>
-        k in obj && typeof (obj as Record<string, unknown>)[k] === "string",
-    )
-  );
+function getToolLabel(toolName: string, state: "running" | "done"): string {
+  const labels = TOOL_LABELS[toolName];
+  if (!labels) return state === "running" ? "Running" : "Done";
+  return state === "running" ? labels[0] : labels[1];
 }
 
 const markdownComponents = {
@@ -117,193 +70,35 @@ function ToolCard({
   >;
   isComplete: boolean;
 }) {
-  const Icon = getToolIcon(part.toolName);
   const isRunning = !isComplete && part.type === "tool-call";
   const isError = part.type === "tool-error";
 
-  return (
-    <div
-      className={`tool-card ${isRunning ? "running" : ""} ${isError ? "error" : ""}`}
-    >
-      <div className="tool-card-header">
-        <Icon size={12} />
-        <span className="tool-label">{getToolLabel(part.toolName)}</span>
-        {isRunning && <span className="tool-state">running</span>}
-        {isError && <span className="tool-state error">failed</span>}
-      </div>
-      {isComplete && part.type === "tool-result" && (
-        <ToolResultContent toolName={part.toolName} result={part.result} />
-      )}
-      {isError && part.type === "tool-error" && (
-        <div className="tool-error-text">{part.error}</div>
-      )}
-    </div>
-  );
-}
-
-function ToolResultContent({
-  toolName,
-  result,
-}: {
-  toolName: string;
-  result: unknown;
-}) {
-  if (result === null || result === undefined) {
-    return <div className="tool-text muted">No result</div>;
-  }
-
-  if (toolName === "getScreenshot" && hasStringKeys(result, "imageDataUrl")) {
+  if (isRunning) {
     return (
-      <img
-        src={result.imageDataUrl}
-        alt="Screenshot"
-        className="tool-screenshot"
-      />
-    );
-  }
-
-  if (toolName === "getPageContent" && hasStringKeys(result, "title", "url")) {
-    return (
-      <div className="tool-text">
-        <span className="tool-page-title">{result.title}</span>
-        <span className="tool-page-url">{result.url}</span>
+      <div className="tool-inline running">
+        <span className="streaming-cursor" />
+        <span>{getToolLabel(part.toolName, "running")}</span>
       </div>
     );
   }
 
-  if (toolName === "getPageStructure" && hasKey(result, "elements")) {
-    const elements = (
-      result as { elements: Array<{ tag: string; label: string }> }
-    ).elements;
+  if (isError) {
     return (
-      <div className="tool-text">
-        {elements.slice(0, 8).map((el, i) => (
-          <div key={i} className="tool-element">
-            <span className="tool-element-tag">&lt;{el.tag}&gt;</span>
-            <span>{el.label.slice(0, 50)}</span>
-          </div>
-        ))}
-        {elements.length > 8 && (
-          <span className="tool-text muted">+{elements.length - 8} more</span>
-        )}
+      <div className="tool-inline error">
+        <span>{part.toolName} failed</span>
       </div>
     );
   }
 
-  if (toolName === "getPageLinks" && hasKey(result, "links")) {
-    const links = (result as { links: Array<{ text: string; href: string }> })
-      .links;
+  if (isComplete && part.type === "tool-result") {
     return (
-      <div className="tool-text">
-        {links.slice(0, 5).map((l, i) => (
-          <div key={i} className="tool-link">
-            <span>{l.text || l.href.slice(0, 60)}</span>
-          </div>
-        ))}
-        {links.length > 5 && (
-          <span className="tool-text muted">
-            +{links.length - 5} more links
-          </span>
-        )}
+      <div className="tool-inline done">
+        <span>{getToolLabel(part.toolName, "done")}</span>
       </div>
     );
   }
 
-  if (toolName === "getElementInfo" && hasStringKeys(result, "tag")) {
-    const r = result as { tag: string; text: string; visible: boolean };
-    return (
-      <div className="tool-text">
-        <span className="tool-element-tag">&lt;{r.tag}&gt;</span>
-        {r.text && <span> — {r.text.slice(0, 80)}</span>}
-        {!r.visible && <span className="muted"> (hidden)</span>}
-      </div>
-    );
-  }
-
-  if (toolName === "navigateTo" && hasStringKeys(result, "finalUrl")) {
-    return <div className="tool-text">Navigated to {result.finalUrl}</div>;
-  }
-
-  if (toolName === "clickElement" && hasStringKeys(result, "message")) {
-    return <div className="tool-text">{result.message}</div>;
-  }
-
-  if (toolName === "typeText" && hasStringKeys(result, "message")) {
-    return <div className="tool-text">{result.message}</div>;
-  }
-
-  if (toolName === "waitForElement" && hasKey(result, "found")) {
-    const r = result as { found: boolean; elapsed: number };
-    return (
-      <div className="tool-text">
-        {r.found ? `Found after ${r.elapsed}ms` : `Not found (${r.elapsed}ms)`}
-      </div>
-    );
-  }
-
-  if (toolName === "fillForm" && hasKey(result, "filledCount")) {
-    const r = result as { filledCount: number; errors: string[] };
-    return (
-      <div className="tool-text">
-        Filled {r.filledCount} fields
-        {r.errors.length > 0 && (
-          <span className="tool-error-text"> ({r.errors.length} errors)</span>
-        )}
-      </div>
-    );
-  }
-
-  if (toolName === "extractData" && hasKey(result, "items")) {
-    const items = (result as { items: Array<{ text?: string }>; count: number })
-      .items;
-    return (
-      <div className="tool-text">
-        Extracted {items.length} items
-        {items.slice(0, 3).map((item, i) => (
-          <div key={i} className="tool-item">
-            {item.text?.slice(0, 80)}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (toolName === "selectOption" && hasStringKeys(result, "selectedValue")) {
-    return <div className="tool-text">Selected: {result.selectedValue}</div>;
-  }
-
-  if (
-    toolName === "goBack" ||
-    toolName === "goForward" ||
-    toolName === "reloadPage"
-  ) {
-    return <div className="tool-text">Done</div>;
-  }
-
-  if (toolName === "openTab" && hasStringKeys(result, "url")) {
-    return <div className="tool-text">Opened {result.url}</div>;
-  }
-
-  if (typeof result === "string") {
-    return <div className="tool-text">{result.slice(0, 200)}</div>;
-  }
-
-  if (hasKey(result, "result")) {
-    const val = (result as { result: unknown }).result;
-    return (
-      <div className="tool-text">
-        {typeof val === "string"
-          ? val.slice(0, 200)
-          : JSON.stringify(val).slice(0, 200)}
-      </div>
-    );
-  }
-
-  return <div className="tool-text muted">Completed</div>;
-}
-
-function hasKey(obj: unknown, key: string): boolean {
-  return typeof obj === "object" && obj !== null && key in obj;
+  return null;
 }
 
 export function ChatMessage({
@@ -359,12 +154,21 @@ export function ChatMessage({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  function isReasoningOpen(index: number): boolean {
+    const isLast = index === message.parts.length - 1;
+    const streaming = isActivelyStreaming && isLast;
+    const stale =
+      isActivelyStreaming && !isLast && !userToggled.has(index);
+    return streaming || (!collapsedReasoning.has(index) && !stale);
+  }
+
   function toggleReasoning(index: number) {
+    const currentlyOpen = isReasoningOpen(index);
     setUserToggled((prev) => new Set([...prev, index]));
     setCollapsedReasoning((prev) => {
       const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
+      if (currentlyOpen) next.add(index);
+      else next.delete(index);
       return next;
     });
   }
@@ -377,7 +181,7 @@ export function ChatMessage({
             if (part.content === "[REDACTED]") return null;
             const isStreaming =
               isActivelyStreaming && index === message.parts.length - 1;
-            const isOpen = isStreaming || !collapsedReasoning.has(index);
+            const isOpen = isReasoningOpen(index);
             return (
               <div key={index}>
                 <button
@@ -426,7 +230,7 @@ export function ChatMessage({
 
           case "tool-error":
             return (
-              <ToolCard key={part.toolCallId} part={part} isComplete={false} />
+              <ToolCard key={part.toolCallId} part={part} isComplete />
             );
         }
       })}

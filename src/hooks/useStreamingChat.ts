@@ -1,3 +1,4 @@
+import { useRef, useCallback } from "react";
 import { type TextStreamPart } from "ai";
 import { useChatStore } from "@/store/chat";
 import { type AgentTools } from "@/lib/tools";
@@ -63,6 +64,15 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
     setError,
   } = useChatStore();
 
+  const abortRef = useRef<AbortController | null>(null);
+
+  const abort = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+  }, []);
+
   const sendMessage = async (content: string) => {
     if (!apiKey) {
       setError("Please add your API key in Settings");
@@ -88,11 +98,14 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
     setStreaming(true);
     setError(null);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       let pageContext: { url: string; title: string } | undefined;
       try {
-        const content = await sendToBackground("GET_PAGE_CONTENT");
-        pageContext = { url: content.url, title: content.title };
+        const pageContent = await sendToBackground("GET_PAGE_CONTENT");
+        pageContext = { url: pageContent.url, title: pageContent.title };
       } catch {
         // Page context unavailable (e.g., chrome:// page)
       }
@@ -109,6 +122,7 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
 
       const result = await agent.stream({
         messages: coreMessages,
+        abortSignal: controller.signal,
       });
 
       let currentPartType:
@@ -122,6 +136,8 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
       let accumulatedReasoning = "";
 
       for await (const event of result.fullStream) {
+        if (controller.signal.aborted) break;
+
         handleStreamEvent(event, {
           onTextDelta(text) {
             if (currentPartType !== "text") {
@@ -176,15 +192,20 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
         });
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setError(message);
-      useChatStore.setState((state) => ({
-        messages: state.messages.filter((m) => m.id !== assistantId),
-      }));
+      if (controller.signal.aborted) {
+        // User aborted — keep existing parts
+      } else {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        setError(message);
+        useChatStore.setState((state) => ({
+          messages: state.messages.filter((m) => m.id !== assistantId),
+        }));
+      }
     } finally {
+      abortRef.current = null;
       setStreaming(false);
     }
   };
 
-  return { sendMessage };
+  return { sendMessage, abort };
 }

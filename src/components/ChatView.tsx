@@ -1,9 +1,11 @@
 import { useEffect, useRef } from "react";
-import { Plus, Settings as SettingsIcon } from "lucide-react";
+import { Plus, Settings as SettingsIcon, AlertCircle } from "lucide-react";
 import { useChatStore } from "@/store/chat";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { useStreamingChat } from "@/hooks/useStreamingChat";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface ChatViewProps {
   apiKey: string;
@@ -21,16 +23,38 @@ export function ChatView({
   onNewChat,
 }: ChatViewProps) {
   const { messages, isStreaming, error } = useChatStore();
-  const { sendMessage } = useStreamingChat({ apiKey, model });
+  const { sendMessage, abort } = useStreamingChat({ apiKey, model });
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Track if user is near bottom (within 150px)
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = list;
+      isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 150;
+    };
+    list.addEventListener("scroll", handleScroll, { passive: true });
+    return () => list.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Scroll on new message
   useEffect(() => {
     scrollToBottom();
   }, [messages.length]);
+
+  // Auto-scroll during streaming if user is near bottom
+  useEffect(() => {
+    if (isStreaming && isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
+    }
+  });
 
   return (
     <div className="sidepanel">
@@ -39,43 +63,24 @@ export function ChatView({
           <span>Pavo</span>
         </div>
         <div className="header-controls">
-          <button
-            className="icon-btn"
-            onClick={onNewChat}
-            title="New chat"
-            type="button"
-          >
+          <Button variant="ghost" size="icon" onClick={onNewChat} title="New chat">
             <Plus />
-          </button>
-          <button
-            className="icon-btn"
-            onClick={onSettings}
-            title="Settings"
-            type="button"
-          >
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onSettings} title="Settings">
             <SettingsIcon />
-          </button>
+          </Button>
         </div>
       </header>
 
       <div className="chat-body">
         {error && (
-          <div className="error-banner">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            <span>{error}</span>
-          </div>
+          <Alert variant="destructive" className="m-0 rounded-none border-x-0 border-t-0">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
-        <div className="message-list">
+        <div className="message-list" ref={listRef}>
           {messages.length === 0 ? (
             <EmptyState onSend={sendMessage} />
           ) : (
@@ -102,7 +107,8 @@ export function ChatView({
 
         <ChatInput
           onSend={sendMessage}
-          disabled={isStreaming}
+          isStreaming={isStreaming}
+          onAbort={abort}
           model={model}
           onModelChange={onModelChange}
         />
@@ -128,14 +134,14 @@ function EmptyState({ onSend }: { onSend: (msg: string) => void }) {
       <p className="empty-label">What would you like to explore?</p>
       <div className="suggestion-chips">
         {suggestions.map((s) => (
-          <button
+          <Button
             key={s}
-            className="suggestion-chip"
+            variant="outline"
+            className="suggestion-chip justify-start h-auto py-2 px-3"
             onClick={() => onSend(s)}
-            type="button"
           >
             {s}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

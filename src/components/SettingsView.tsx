@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import { getSettings, saveSettings, type Settings } from "@/lib/settings";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface SettingsViewProps {
   onBack: () => void;
@@ -27,19 +29,18 @@ export function SettingsView({ onBack, onSaved }: SettingsViewProps) {
 
   return (
     <div className="settings-view">
-      <button className="settings-back-btn" onClick={onBack} type="button">
+      <Button variant="outline" size="sm" onClick={onBack}>
         <ArrowLeft />
         <span>Back to chat</span>
-      </button>
+      </Button>
 
       <div className="settings-section">
         <label className="settings-label" htmlFor="api-key">
           OpenRouter API Key
         </label>
-        <input
+        <Input
           id="api-key"
           type="password"
-          className="settings-input"
           value={settings.apiKey}
           onChange={(e) =>
             setSettings((s) => ({ ...s, apiKey: e.target.value }))
@@ -48,14 +49,9 @@ export function SettingsView({ onBack, onSaved }: SettingsViewProps) {
         />
       </div>
 
-      <button
-        className="settings-save-btn"
-        onClick={handleSave}
-        disabled={isSaving}
-        type="button"
-      >
+      <Button onClick={handleSave} disabled={isSaving}>
         {isSaving ? "Saving..." : "Save Settings"}
-      </button>
+      </Button>
     </div>
   );
 }
