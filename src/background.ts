@@ -3,25 +3,25 @@ const PANEL_PATH = "sidepanel.html";
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 chrome.sidePanel.setOptions({ path: PANEL_PATH, enabled: false });
 
-let activePavoGroupId: number | null = null;
+let activeIntronGroupId: number | null = null;
 
-async function ensurePavoGroup(tab: chrome.tabs.Tab): Promise<number> {
-  // Already in a Pavo group — keep it
+async function ensureIntronGroup(tab: chrome.tabs.Tab): Promise<number> {
+  // Already in an Intron group — keep it
   if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
     try {
       const group = await chrome.tabGroups.get(tab.groupId);
-      if (group.title === "Pavo") return group.id;
+      if (group.title === "Intron") return group.id;
     } catch {
       /* group deleted */
     }
   }
-  // Always create a new group — each session gets its own Pavo group (1 tab each)
+  // Always create a new group — each session gets its own Intron group (1 tab each)
   const groupId = await chrome.tabs.group({
     tabIds: tab.id!,
     createProperties: { windowId: tab.windowId },
   });
   await chrome.tabGroups.update(groupId, {
-    title: "Pavo",
+    title: "Intron",
     color: "cyan",
     collapsed: false,
   });
@@ -35,9 +35,9 @@ chrome.action.onClicked.addListener(async (tab) => {
     chrome.sidePanel.setOptions({ tabId: tab.id, path: PANEL_PATH, enabled: true });
     // First await MUST be open() — Chrome requires user gesture on first async boundary
     await chrome.sidePanel.open({ tabId: tab.id });
-    activePavoGroupId = await ensurePavoGroup(tab);
+    activeIntronGroupId = await ensureIntronGroup(tab);
   } catch (err) {
-    console.error("[Pavo] Failed to open sidepanel:", err);
+    console.error("[Intron] Failed to open sidepanel:", err);
   }
 });
 
@@ -79,10 +79,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         enabled: false,
       });
     } else {
-      // Tab joined a group — check if it's the Pavo group
+      // Tab joined a group — check if it's the Intron group
       try {
         const group = await chrome.tabGroups.get(changeInfo.groupId!);
-        if (group.title === "Pavo") {
+        if (group.title === "Intron") {
           await chrome.sidePanel.setOptions({
             tabId,
             path: PANEL_PATH,
@@ -112,13 +112,13 @@ async function getActiveTab(): Promise<chrome.tabs.Tab> {
   return tab;
 }
 
-async function getPavoTab(): Promise<chrome.tabs.Tab | null> {
-  if (activePavoGroupId === null) return null;
+async function getIntronTab(): Promise<chrome.tabs.Tab | null> {
+  if (activeIntronGroupId === null) return null;
   try {
-    const tabs = await chrome.tabs.query({ groupId: activePavoGroupId });
+    const tabs = await chrome.tabs.query({ groupId: activeIntronGroupId });
     return tabs[0] ?? null;
   } catch {
-    activePavoGroupId = null;
+    activeIntronGroupId = null;
     return null;
   }
 }
@@ -159,7 +159,7 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
   },
 
   async NAVIGATE_TO({ url }: { url: string }) {
-    const tab = (await getPavoTab()) ?? (await getActiveTab());
+    const tab = (await getIntronTab()) ?? (await getActiveTab());
     await chrome.tabs.update(tab.id!, { url });
     await new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
@@ -933,18 +933,18 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     return { success: true };
   },
 
-  async FIND_OR_CREATE_PAVO_GROUP() {
+  async FIND_OR_CREATE_INTRON_GROUP() {
     const tab = await getActiveTab();
     await chrome.sidePanel.setOptions({
       tabId: tab.id!,
       path: PANEL_PATH,
       enabled: true,
     });
-    activePavoGroupId = await ensurePavoGroup(tab);
-    return { groupId: activePavoGroupId, created: false };
+    activeIntronGroupId = await ensureIntronGroup(tab);
+    return { groupId: activeIntronGroupId, created: false };
   },
 
-  async REMOVE_FROM_PAVO_GROUP({ tabId }: { tabId?: number }) {
+  async REMOVE_FROM_INTRON_GROUP({ tabId }: { tabId?: number }) {
     const tab = tabId ? await chrome.tabs.get(tabId) : await getActiveTab();
     if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
       await chrome.tabs.ungroup(tab.id!);
@@ -968,7 +968,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     })
     .catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[Pavo] ${type} → error:`, msg);
+      console.error(`[Intron] ${type} → error:`, msg);
       sendResponse({ error: msg });
     });
   return true;

@@ -143,11 +143,11 @@ export interface BackgroundMessages {
     payload: { tabId?: number };
     response: { success: boolean };
   };
-  FIND_OR_CREATE_PAVO_GROUP: {
+  FIND_OR_CREATE_INTRON_GROUP: {
     payload: Record<string, never>;
     response: { groupId: number; created: boolean };
   };
-  REMOVE_FROM_PAVO_GROUP: {
+  REMOVE_FROM_INTRON_GROUP: {
     payload: { tabId?: number };
     response: { success: boolean };
   };

@@ -60,7 +60,14 @@ export function ChatView({
     <div className="sidepanel">
       <header className="header">
         <div className="header-brand">
-          <span>Pavo</span>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <rect width="18" height="18" rx="4" fill="#111"/>
+            <rect x="2.5" y="5.5" width="4.5" height="1.5" rx="0.75" fill="#E0E0E0"/>
+            <path d="M7 6.25 C8.2 6.25 8.2 11 11.5 11" stroke="#E0E0E0" strokeWidth="1.2" strokeLinecap="round" opacity="0.4"/>
+            <rect x="11.5" y="10.25" width="4" height="1.5" rx="0.75" fill="#E0E0E0"/>
+            <rect x="2.5" y="12.5" width="13" height="1.5" rx="0.75" fill="#888" opacity="0.45"/>
+          </svg>
+          <span>Intron</span>
         </div>
         <div className="header-controls">
           <Button variant="ghost" size="icon" onClick={onNewChat} title="New chat">
@@ -128,20 +135,29 @@ function StreamingIndicator() {
 }
 
 function EmptyState({ onSend }: { onSend: (msg: string) => void }) {
-  const suggestions = ["Summarize this page", "Help me write something"];
+  const suggestions = [
+    { label: "Summarize this page", icon: "📄" },
+    { label: "Help me write", icon: "✍️" },
+    { label: "Find info on page", icon: "🔍" },
+    { label: "Fill a form", icon: "📝" },
+  ];
   return (
-    <div className="empty-state">
-      <p className="empty-label">What would you like to explore?</p>
-      <div className="suggestion-chips">
+    <div className="home">
+      <div className="home-hero">
+        <div className="home-eye" />
+        <p className="home-tagline">What can I help with?</p>
+      </div>
+      <div className="home-grid">
         {suggestions.map((s) => (
-          <Button
-            key={s}
-            variant="outline"
-            className="suggestion-chip justify-start h-auto py-2 px-3"
-            onClick={() => onSend(s)}
+          <button
+            key={s.label}
+            className="home-chip"
+            onClick={() => onSend(s.label)}
+            type="button"
           >
-            {s}
-          </Button>
+            <span className="home-chip-icon">{s.icon}</span>
+            <span>{s.label}</span>
+          </button>
         ))}
       </div>
     </div>

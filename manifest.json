@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Pavo AI — Sidepanel Agent That Browses and Acts for You",
+  "name": "Intron — AI Browser Agent That Browses and Acts for You",
   "version": "1.0.0",
   "description": "AI-powered browser agent with streaming chat interface",
   "permissions": ["sidePanel", "storage", "activeTab", "scripting", "commands", "tabGroups"],
@@ -12,7 +12,7 @@
     "default_path": "sidepanel.html"
   },
   "action": {
-    "default_title": "Open Pavo"
+    "default_title": "Open Intron"
   },
   "icons": {
     "16": "icons/icon16.png",

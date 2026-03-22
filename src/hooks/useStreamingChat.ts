@@ -163,7 +163,7 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
           onToolCall(toolCallId, toolName, input) {
             if (!hasGrouped) {
               hasGrouped = true;
-              sendToBackground("FIND_OR_CREATE_PAVO_GROUP").catch(() => {});
+              sendToBackground("FIND_OR_CREATE_INTRON_GROUP").catch(() => {});
             }
             currentPartType = "tool-call";
             appendPart(assistantId, {
