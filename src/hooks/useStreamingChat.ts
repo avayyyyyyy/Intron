@@ -1,10 +1,10 @@
 import { useRef, useCallback } from "react";
-import { type TextStreamPart } from "ai";
+import { type TextStreamPart, type ModelMessage } from "ai";
 import { useChatStore } from "@/store/chat";
 import { type AgentTools } from "@/lib/tools";
 import { createAgent } from "@/lib/agent";
 import { sendToBackground } from "@/lib/messaging";
-import type { Message } from "@/store/types";
+import type { Message, MessagePart } from "@/store/types";
 import { getTextFromParts } from "@/store/types";
 
 interface UseStreamingChatOptions {
@@ -21,6 +21,28 @@ interface StreamEventHandlers {
   onToolResult: (toolCallId: string, toolName: string, output: unknown) => void;
   onToolError: (toolCallId: string, toolName: string, error: unknown) => void;
   onError: (error: unknown) => void;
+}
+
+function buildMessageContent(
+  parts: MessagePart[],
+):
+  | string
+  | Array<{ type: "text"; text: string } | { type: "image"; image: string }> {
+  if (!parts.some((p) => p.type === "image")) {
+    return getTextFromParts(parts);
+  }
+
+  const content: Array<
+    { type: "text"; text: string } | { type: "image"; image: string }
+  > = [];
+  for (const part of parts) {
+    if (part.type === "text" && part.content.trim()) {
+      content.push({ type: "text", text: part.content });
+    } else if (part.type === "image") {
+      content.push({ type: "image", image: part.image });
+    }
+  }
+  return content;
 }
 
 function handleStreamEvent(
@@ -73,16 +95,29 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
     }
   }, []);
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (
+    content: string,
+    images?: { dataUrl: string; mediaType: string }[],
+  ) => {
     if (!apiKey) {
       setError("Please add your API key in Settings");
       return;
     }
 
+    const userParts: MessagePart[] = [];
+    if (content.trim()) userParts.push({ type: "text", content });
+    for (const img of images ?? []) {
+      userParts.push({
+        type: "image",
+        image: img.dataUrl,
+        mediaType: img.mediaType,
+      });
+    }
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
-      parts: [{ type: "text", content }],
+      parts: userParts,
       createdAt: new Date(),
     };
     addMessage(userMessage);
@@ -112,13 +147,13 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
 
       const agent = createAgent(apiKey, model, pageContext);
 
-      const coreMessages = useChatStore
+      const coreMessages: ModelMessage[] = useChatStore
         .getState()
         .messages.slice(0, -1)
         .map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: getTextFromParts(m.parts),
-        }));
+          role: m.role,
+          content: buildMessageContent(m.parts),
+        })) as ModelMessage[];
 
       const result = await agent.stream({
         messages: coreMessages,
@@ -134,7 +169,6 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
         | null = null;
       let accumulatedText = "";
       let accumulatedReasoning = "";
-      let hasGrouped = false;
 
       for await (const event of result.fullStream) {
         if (controller.signal.aborted) break;
@@ -161,10 +195,6 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
             }
           },
           onToolCall(toolCallId, toolName, input) {
-            if (!hasGrouped) {
-              hasGrouped = true;
-              sendToBackground("FIND_OR_CREATE_INTRON_GROUP").catch(() => {});
-            }
             currentPartType = "tool-call";
             appendPart(assistantId, {
               type: "tool-call",

@@ -333,19 +333,6 @@ const executeScript = tool({
     sendToBackground("EXECUTE_SCRIPT", args as Record<string, unknown>),
 });
 
-const openTab = tool({
-  description: "Open a new browser tab, optionally navigating to a URL.",
-  inputSchema: z.object({
-    url: z.string().optional().describe("URL to open in the new tab"),
-    active: z
-      .boolean()
-      .optional()
-      .default(true)
-      .describe("Switch to new tab immediately"),
-  }),
-  execute: async (args) => sendToBackground("OPEN_TAB", args),
-});
-
 export const agentTools = {
   // Core info
   getScreenshot,
@@ -371,8 +358,6 @@ export const agentTools = {
   extractData,
   // Scripting
   executeScript,
-  // Tabs
-  openTab,
 };
 
 export type AgentTools = typeof agentTools;
@@ -399,7 +384,6 @@ export const TOOL_META: Record<ToolName, { label: string; iconName: string }> =
     waitForElement: { label: "Wait for element", iconName: "Timer" },
     extractData: { label: "Extract data", iconName: "Database" },
     executeScript: { label: "Run script", iconName: "Terminal" },
-    openTab: { label: "Open tab", iconName: "Plus" },
   };
 
 const { getScreenshot: _gs, ...toolsWithoutScreenshot } = agentTools;

@@ -1,9 +1,16 @@
+declare namespace chrome.tabs {
+  function captureTab(
+    tabId: number,
+    options?: { format?: string; quality?: number },
+  ): Promise<string>;
+}
+
 const PANEL_PATH = "sidepanel.html";
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 chrome.sidePanel.setOptions({ path: PANEL_PATH, enabled: false });
 
-let activeIntronGroupId: number | null = null;
+const tabGroupMap = new Map<number, number>(); // tabId → groupId
 
 async function ensureIntronGroup(tab: chrome.tabs.Tab): Promise<number> {
   // Already in an Intron group — keep it
@@ -25,6 +32,7 @@ async function ensureIntronGroup(tab: chrome.tabs.Tab): Promise<number> {
     color: "cyan",
     collapsed: false,
   });
+  tabGroupMap.set(tab.id!, groupId);
   return groupId;
 }
 
@@ -32,10 +40,14 @@ chrome.action.onClicked.addListener(async (tab) => {
   if (!tab.id || !tab.url || tab.url.startsWith("chrome://")) return;
   try {
     // Fire-and-forget setOptions (no await) — keeps open() in gesture context
-    chrome.sidePanel.setOptions({ tabId: tab.id, path: PANEL_PATH, enabled: true });
+    chrome.sidePanel.setOptions({
+      tabId: tab.id,
+      path: PANEL_PATH,
+      enabled: true,
+    });
     // First await MUST be open() — Chrome requires user gesture on first async boundary
     await chrome.sidePanel.open({ tabId: tab.id });
-    activeIntronGroupId = await ensureIntronGroup(tab);
+    await ensureIntronGroup(tab);
   } catch (err) {
     console.error("[Intron] Failed to open sidepanel:", err);
   }
@@ -98,6 +110,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabStateCache.delete(tabId);
+  tabGroupMap.delete(tabId);
   chrome.storage.session.remove([`tab_${tabId}`]);
 });
 
@@ -112,13 +125,28 @@ async function getActiveTab(): Promise<chrome.tabs.Tab> {
   return tab;
 }
 
-async function getIntronTab(): Promise<chrome.tabs.Tab | null> {
-  if (activeIntronGroupId === null) return null;
+async function getSourceTab(payload: {
+  _sourceTabId?: number;
+}): Promise<chrome.tabs.Tab> {
+  if (payload._sourceTabId) {
+    try {
+      return await chrome.tabs.get(payload._sourceTabId);
+    } catch {
+      /* tab was closed */
+    }
+  }
+  return getActiveTab();
+}
+
+async function getIntronTab(tabId?: number): Promise<chrome.tabs.Tab | null> {
+  if (tabId === undefined) return null;
+  const groupId = tabGroupMap.get(tabId);
+  if (groupId === undefined) return null;
   try {
-    const tabs = await chrome.tabs.query({ groupId: activeIntronGroupId });
+    const tabs = await chrome.tabs.query({ groupId });
     return tabs[0] ?? null;
   } catch {
-    activeIntronGroupId = null;
+    tabGroupMap.delete(tabId);
     return null;
   }
 }
@@ -141,13 +169,19 @@ function injectScript<T>(
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 const handlers: Record<string, (payload: any) => Promise<any>> = {
-  async CAPTURE_SCREENSHOT() {
+  async CAPTURE_SCREENSHOT({ _sourceTabId }: { _sourceTabId?: number }) {
+    if (_sourceTabId) {
+      const dataUrl = await chrome.tabs.captureTab(_sourceTabId, {
+        format: "png",
+      });
+      return { dataUrl };
+    }
     const dataUrl = await chrome.tabs.captureVisibleTab({ format: "png" });
     return { dataUrl };
   },
 
-  async GET_PAGE_CONTENT() {
-    const tab = await getActiveTab();
+  async GET_PAGE_CONTENT(payload: { _sourceTabId?: number }) {
+    const tab = await getSourceTab(payload);
     return injectScript(tab.id!, () => ({
       title: document.title,
       url: location.href,
@@ -158,8 +192,16 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     }));
   },
 
-  async NAVIGATE_TO({ url }: { url: string }) {
-    const tab = (await getIntronTab()) ?? (await getActiveTab());
+  async NAVIGATE_TO({
+    url,
+    _sourceTabId,
+  }: {
+    url: string;
+    _sourceTabId?: number;
+  }) {
+    const tab =
+      (await getIntronTab(_sourceTabId)) ??
+      (await getSourceTab({ _sourceTabId }));
     await chrome.tabs.update(tab.id!, { url });
     await new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
@@ -179,20 +221,20 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     return { success: true, finalUrl: updated.url ?? url };
   },
 
-  async GO_BACK() {
-    const tab = await getActiveTab();
+  async GO_BACK(payload: { _sourceTabId?: number }) {
+    const tab = await getSourceTab(payload);
     await chrome.tabs.goBack(tab.id!);
     return { success: true };
   },
 
-  async GO_FORWARD() {
-    const tab = await getActiveTab();
+  async GO_FORWARD(payload: { _sourceTabId?: number }) {
+    const tab = await getSourceTab(payload);
     await chrome.tabs.goForward(tab.id!);
     return { success: true };
   },
 
-  async RELOAD_PAGE() {
-    const tab = await getActiveTab();
+  async RELOAD_PAGE(payload: { _sourceTabId?: number }) {
+    const tab = await getSourceTab(payload);
     await chrome.tabs.reload(tab.id!);
     return { success: true };
   },
@@ -201,12 +243,14 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     selector,
     text,
     nth = 0,
+    _sourceTabId,
   }: {
     selector?: string;
     text?: string;
     nth?: number;
+    _sourceTabId?: number;
   }) {
-    const tab = await getActiveTab();
+    const tab = await getSourceTab({ _sourceTabId });
     return injectScript(
       tab.id!,
       (sel: string | undefined, txt: string | undefined, n: number) => {
@@ -250,12 +294,14 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     text,
     selector,
     clearFirst = false,
+    _sourceTabId,
   }: {
     text: string;
     selector?: string;
     clearFirst?: boolean;
+    _sourceTabId?: number;
   }) {
-    const tab = await getActiveTab();
+    const tab = await getSourceTab({ _sourceTabId });
     return injectScript(
       tab.id!,
       (sel: string | undefined, txt: string, clear: boolean) => {
@@ -291,12 +337,14 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     key,
     modifiers = [],
     selector,
+    _sourceTabId,
   }: {
     key: string;
     modifiers?: string[];
     selector?: string;
+    _sourceTabId?: number;
   }) {
-    const tab = await getActiveTab();
+    const tab = await getSourceTab({ _sourceTabId });
     await injectScript(
       tab.id!,
       (sel: string | undefined, k: string, mods: string[]) => {
@@ -328,13 +376,15 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     amount = 400,
     toSelector,
     toPercent,
+    _sourceTabId,
   }: {
     direction?: string;
     amount?: number;
     toSelector?: string;
     toPercent?: number;
+    _sourceTabId?: number;
   }) {
-    const tab = await getActiveTab();
+    const tab = await getSourceTab({ _sourceTabId });
 
     // MUST use world: "MAIN" for scrolling.
     //
@@ -471,8 +521,14 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     return result.result;
   },
 
-  async HOVER_ELEMENT({ selector }: { selector: string }) {
-    const tab = await getActiveTab();
+  async HOVER_ELEMENT({
+    selector,
+    _sourceTabId,
+  }: {
+    selector: string;
+    _sourceTabId?: number;
+  }) {
+    const tab = await getSourceTab({ _sourceTabId });
     await injectScript(
       tab.id!,
       (sel: string) => {
@@ -490,12 +546,14 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     selector,
     label,
     value,
+    _sourceTabId,
   }: {
     selector: string;
     label?: string;
     value?: string;
+    _sourceTabId?: number;
   }) {
-    const tab = await getActiveTab();
+    const tab = await getSourceTab({ _sourceTabId });
     return injectScript(
       tab.id!,
       (sel: string, lbl: string | undefined, val: string | undefined) => {
@@ -517,11 +575,13 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
   async FILL_FORM({
     fields,
     submitSelector,
+    _sourceTabId,
   }: {
     fields: Array<{ selector: string; value: string; type?: string }>;
     submitSelector?: string;
+    _sourceTabId?: number;
   }) {
-    const tab = await getActiveTab();
+    const tab = await getSourceTab({ _sourceTabId });
     return injectScript(
       tab.id!,
       (
@@ -560,8 +620,14 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     );
   },
 
-  async GET_PAGE_STRUCTURE({ filter = "interactive" }: { filter?: string }) {
-    const tab = await getActiveTab();
+  async GET_PAGE_STRUCTURE({
+    filter = "interactive",
+    _sourceTabId,
+  }: {
+    filter?: string;
+    _sourceTabId?: number;
+  }) {
+    const tab = await getSourceTab({ _sourceTabId });
     return injectScript(
       tab.id!,
       (f: string) => {
@@ -605,8 +671,14 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     );
   },
 
-  async GET_ELEMENT_INFO({ selector }: { selector: string }) {
-    const tab = await getActiveTab();
+  async GET_ELEMENT_INFO({
+    selector,
+    _sourceTabId,
+  }: {
+    selector: string;
+    _sourceTabId?: number;
+  }) {
+    const tab = await getSourceTab({ _sourceTabId });
     return injectScript(
       tab.id!,
       (sel: string) => {
@@ -645,11 +717,13 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
   async GET_PAGE_LINKS({
     internalOnly = false,
     limit = 50,
+    _sourceTabId,
   }: {
     internalOnly?: boolean;
     limit?: number;
+    _sourceTabId?: number;
   }) {
-    const tab = await getActiveTab();
+    const tab = await getSourceTab({ _sourceTabId });
     return injectScript(
       tab.id!,
       (internal: boolean, lim: number) => {
@@ -675,12 +749,14 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     selector,
     timeout = 5000,
     visible = true,
+    _sourceTabId,
   }: {
     selector: string;
     timeout?: number;
     visible?: boolean;
+    _sourceTabId?: number;
   }) {
-    const tab = await getActiveTab();
+    const tab = await getSourceTab({ _sourceTabId });
     return injectScript(
       tab.id!,
       (sel: string, ms: number, needsVisible: boolean) => {
@@ -708,12 +784,14 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     description,
     containerSelector,
     limit = 20,
+    _sourceTabId,
   }: {
     description: string;
     containerSelector?: string;
     limit?: number;
+    _sourceTabId?: number;
   }) {
-    const tab = await getActiveTab();
+    const tab = await getSourceTab({ _sourceTabId });
     return injectScript(
       tab.id!,
       (desc: string, contSel: string | undefined, lim: number) => {
@@ -756,6 +834,7 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     eventName,
     eventDetail,
     attribute,
+    _sourceTabId,
   }: {
     // Which pre-built operation to run
     operation:
@@ -777,8 +856,9 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     value?: string;
     eventName?: string;
     eventDetail?: Record<string, unknown>;
+    _sourceTabId?: number;
   }) {
-    const tab = await getActiveTab();
+    const tab = await getSourceTab({ _sourceTabId });
     return injectScript(
       tab.id!,
       (
@@ -894,62 +974,6 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
       },
       [operation, selector, attribute, property, value, eventName, eventDetail],
     );
-  },
-
-  async GET_TABS_LIST() {
-    const tab = await getActiveTab();
-    return {
-      tabs: [
-        {
-          id: tab.id!,
-          title: tab.title ?? "",
-          url: tab.url ?? "",
-          active: true,
-          favIconUrl: tab.favIconUrl,
-        },
-      ],
-    };
-  },
-
-  async OPEN_TAB({ url, active = true }: { url?: string; active?: boolean }) {
-    const tab = await chrome.tabs.create({ url, active });
-    return { tabId: tab.id!, url: tab.url ?? url ?? "" };
-  },
-
-  async SWITCH_TAB({ tabId }: { tabId: number }) {
-    await chrome.tabs.update(tabId, { active: true });
-    const tab = await chrome.tabs.get(tabId);
-    await chrome.windows.update(tab.windowId, { focused: true });
-    return { success: true };
-  },
-
-  async CLOSE_TAB({ tabId }: { tabId?: number }) {
-    if (tabId) {
-      await chrome.tabs.remove(tabId);
-    } else {
-      const tab = await getActiveTab();
-      await chrome.tabs.remove(tab.id!);
-    }
-    return { success: true };
-  },
-
-  async FIND_OR_CREATE_INTRON_GROUP() {
-    const tab = await getActiveTab();
-    await chrome.sidePanel.setOptions({
-      tabId: tab.id!,
-      path: PANEL_PATH,
-      enabled: true,
-    });
-    activeIntronGroupId = await ensureIntronGroup(tab);
-    return { groupId: activeIntronGroupId, created: false };
-  },
-
-  async REMOVE_FROM_INTRON_GROUP({ tabId }: { tabId?: number }) {
-    const tab = tabId ? await chrome.tabs.get(tabId) : await getActiveTab();
-    if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
-      await chrome.tabs.ungroup(tab.id!);
-    }
-    return { success: true };
   },
 };
 

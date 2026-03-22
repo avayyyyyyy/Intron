@@ -232,6 +232,13 @@ export function ChatMessage({
             return (
               <ToolCard key={part.toolCallId} part={part} isComplete />
             );
+
+          case "image":
+            return (
+              <div key={index} className="message-image">
+                <img src={part.image} alt="User uploaded" />
+              </div>
+            );
         }
       })}
 

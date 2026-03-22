@@ -134,7 +134,7 @@ function StreamingIndicator() {
   );
 }
 
-function EmptyState({ onSend }: { onSend: (msg: string) => void }) {
+function EmptyState({ onSend }: { onSend: (msg: string, images?: { dataUrl: string; mediaType: string }[]) => void }) {
   const suggestions = [
     { label: "Summarize this page", icon: "📄" },
     { label: "Help me write", icon: "✍️" },

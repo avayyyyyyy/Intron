@@ -1,3 +1,8 @@
+let _sourceTabId: number | undefined;
+export function setSourceTabId(id: number) {
+  _sourceTabId = id;
+}
+
 export type MessageType = keyof BackgroundMessages;
 
 export interface BackgroundMessages {
@@ -119,38 +124,6 @@ export interface BackgroundMessages {
     };
     response: { result: unknown; error?: string };
   };
-  GET_TABS_LIST: {
-    payload: Record<string, never>;
-    response: {
-      tabs: Array<{
-        id: number;
-        title: string;
-        url: string;
-        active: boolean;
-        favIconUrl?: string;
-      }>;
-    };
-  };
-  OPEN_TAB: {
-    payload: { url?: string; active?: boolean };
-    response: { tabId: number; url: string };
-  };
-  SWITCH_TAB: {
-    payload: { tabId: number };
-    response: { success: boolean };
-  };
-  CLOSE_TAB: {
-    payload: { tabId?: number };
-    response: { success: boolean };
-  };
-  FIND_OR_CREATE_INTRON_GROUP: {
-    payload: Record<string, never>;
-    response: { groupId: number; created: boolean };
-  };
-  REMOVE_FROM_INTRON_GROUP: {
-    payload: { tabId?: number };
-    response: { success: boolean };
-  };
 }
 
 export function sendToBackground<T extends MessageType>(
@@ -158,16 +131,19 @@ export function sendToBackground<T extends MessageType>(
   payload?: Record<string, unknown>,
 ): Promise<BackgroundMessages[T]["response"]> {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ type, ...payload }, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-      if (response?.error) {
-        reject(new Error(response.error));
-        return;
-      }
-      resolve(response);
-    });
+    chrome.runtime.sendMessage(
+      { type, ...payload, _sourceTabId },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        if (response?.error) {
+          reject(new Error(response.error));
+          return;
+        }
+        resolve(response);
+      },
+    );
   });
 }
