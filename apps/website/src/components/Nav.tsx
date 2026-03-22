@@ -78,9 +78,13 @@ export default function Nav() {
         </li>
       </ul>
       <div className="nav-right">
-        <button className="btn btn-ghost">Sign in</button>
-        <a href="#cta" className="btn btn-primary">
-          Add to Chrome
+        <a
+          href="https://github.com/avayyyyyyy/Intron"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn btn-primary"
+        >
+          Star on GitHub
           <ArrowIcon />
         </a>
       </div>

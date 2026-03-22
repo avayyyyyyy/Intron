@@ -295,6 +295,7 @@ nav {
   color: var(--text-2);
   letter-spacing: 0.04em;
   margin-bottom: 40px;
+  backdrop-filter: blur(8px);
 }
 .badge-dot {
   width: 5px;
@@ -400,6 +401,29 @@ nav {
 }
 .av-4 {
   background: #333;
+}
+.github-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--r-xs);
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.github-stars {
+  font-weight: 600;
+  color: var(--text-1);
+}
+.github-label {
+  color: var(--text-3);
+}
+.trust-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border-light);
 }
 .trust-text {
   font-size: 12px;
@@ -827,6 +851,7 @@ nav {
 }
 .feat:hover {
   background: var(--surface);
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.02);
 }
 .feat:hover::before {
   opacity: 1;
@@ -1020,6 +1045,159 @@ nav {
   position: relative;
   z-index: 1;
 }
+.cta-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.cta-trust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--text-3);
+  position: relative;
+  z-index: 1;
+}
+.cta-trust-sep {
+  color: var(--border-light);
+}
+
+/* ══════ COMPARISON ══════ */
+.comparison {
+  padding: 100px 0;
+  border-top: 1px solid var(--border);
+  position: relative;
+  z-index: 1;
+}
+.comparison-table {
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+}
+.comparison-header {
+  display: grid;
+  grid-template-columns: 1.5fr repeat(3, 1fr);
+  border-bottom: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.3);
+}
+.comparison-row {
+  display: grid;
+  grid-template-columns: 1.5fr repeat(3, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+.comparison-row:last-child {
+  border-bottom: none;
+}
+.comparison-feature {
+  padding: 16px 20px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  border-right: 1px solid var(--border);
+}
+.comparison-header .comparison-feature {
+  padding: 16px 20px;
+}
+.comparison-col {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--border);
+}
+.comparison-col:last-child {
+  border-right: none;
+}
+.comparison-col-highlight {
+  background: rgba(255, 255, 255, 0.02);
+}
+.col-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-1);
+  letter-spacing: -0.01em;
+}
+.col-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--success);
+  background: rgba(74, 222, 128, 0.1);
+  padding: 2px 8px;
+  border-radius: var(--r-xs);
+  margin-left: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cell-check {
+  color: var(--success);
+}
+.cell-cross {
+  color: var(--text-3);
+  opacity: 0.5;
+}
+.cell-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+/* ══════ TESTIMONIALS ══════ */
+.testimonials {
+  padding: 100px 0;
+  border-top: 1px solid var(--border);
+  position: relative;
+  z-index: 1;
+}
+.company-logos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 56px;
+}
+.company-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: -0.01em;
+  transition:
+    border-color var(--dur-md),
+    color var(--dur-md);
+}
+.company-logo:hover {
+  border-color: var(--border-light);
+  color: var(--text-1);
+}
+.testimonial-quote {
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+}
+.testimonial-quote p {
+  font-size: 20px;
+  line-height: 1.6;
+  color: var(--text-1);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  margin-bottom: 16px;
+}
+.testimonial-quote cite {
+  font-size: 13px;
+  color: var(--text-3);
+  font-style: normal;
+}
 
 /* ══════ FOOTER ══════ */
 footer {
@@ -1056,6 +1234,34 @@ footer {
 .footer-copy {
   font-size: 12px;
   color: var(--text-3);
+}
+.footer-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.footer-built {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.footer-built a {
+  color: var(--text-2);
+  transition: color 150ms;
+}
+.footer-built a:hover {
+  color: var(--text-1);
+}
+.footer-social {
+  display: inline-flex;
+  gap: 12px;
+  margin-left: 8px;
+}
+.footer-social a {
+  color: var(--text-3);
+  transition: color 150ms;
+}
+.footer-social a:hover {
+  color: var(--text-1);
 }
 
 /* ══════ RESPONSIVE ══════ */
@@ -1108,8 +1314,55 @@ footer {
     text-align: center;
     padding: 24px 20px;
   }
+  .footer-left {
+    align-items: center;
+  }
   .footer-links {
     justify-content: center;
+  }
+  .footer-social {
+    justify-content: center;
+  }
+  .comparison-header,
+  .comparison-row {
+    grid-template-columns: 1fr;
+  }
+  .comparison-feature {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    color: var(--text-1);
+  }
+  .comparison-col {
+    border-right: none;
+    justify-content: space-between;
+    padding: 12px 20px;
+  }
+  .comparison-col::before {
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  .comparison-col:nth-child(2)::before {
+    content: "Intron";
+  }
+  .comparison-col:nth-child(3)::before {
+    content: "Operator";
+  }
+  .comparison-col:nth-child(4)::before {
+    content: "Claude";
+  }
+  .comparison-header {
+    display: none;
+  }
+  .company-logos {
+    gap: 8px;
+  }
+  .company-logo {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+  .testimonial-quote p {
+    font-size: 17px;
   }
 }
 @media (max-width: 600px) {

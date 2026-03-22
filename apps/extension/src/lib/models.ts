@@ -48,6 +48,30 @@ export const OPENROUTER_MODELS: OpenRouterModel[] = [
     description: "OpenAI latest nano",
     vision: true,
   },
+  {
+    id: "stepfun/step-3.5-flash:free",
+    name: "Step-3.5 Flash",
+    description: "StepFun, free tier",
+    vision: false,
+  },
+  {
+    id: "z-ai/glm-4.5-air:free",
+    name: "GLM-4.5 Air",
+    description: "Zhipu GLM, free tier",
+    vision: false,
+  },
+  {
+    id: "z-ai/glm-4.7-flash",
+    name: "GLM-4.7 Flash",
+    description: "Zhipu GLM, fast",
+    vision: false,
+  },
+  {
+    id: "google/gemini-2.5-flash-lite",
+    name: "Gemini 2.5 Flash Lite",
+    description: "Google, fast & cheap",
+    vision: true,
+  },
 ];
 
 export function getModelCapabilities(modelId: string): { vision: boolean } {

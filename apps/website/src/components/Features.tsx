@@ -129,37 +129,37 @@ const features = [
     num: "01",
     icon: <CheckIcon />,
     name: "Task Automation",
-    desc: "Describe the goal. Intron clicks, scrolls, fills forms, and navigates — exactly as you would, but without the manual effort.",
+    desc: "Stop clicking manually. Describe what you need — Intron fills forms, navigates menus, and completes multi-step workflows while you watch.",
   },
   {
     num: "02",
     icon: <DocIcon />,
     name: "Page Intelligence",
-    desc: "Intron reads and understands whatever's on screen. Summarize, extract tables, find links, or answer questions about any content.",
+    desc: "Ask questions about any page. Extract tables, summarize articles, find specific links — Intron reads and understands context like a human.",
   },
   {
     num: "03",
     icon: <ClockIcon />,
     name: "Multi-step Reasoning",
-    desc: "Complex tasks are broken into atomic steps. Plan, execute, verify, adapt — Intron handles the chain so you don't have to.",
+    desc: "Complex tasks don't faze it. Intron plans, executes, verifies, and adapts — handling 10-step workflows without losing context.",
   },
   {
     num: "04",
     icon: <GridIcon />,
-    name: "Tab Awareness",
-    desc: "Your agent moves across tabs, opens links, and maintains full context across your entire browser session without losing the thread.",
+    name: "Cross-tab Context",
+    desc: "Move across tabs, open links, compare data — Intron maintains full context across your entire browser session.",
   },
   {
     num: "05",
     icon: <ChartIcon />,
-    name: "Tool Transparency",
-    desc: "Every action Intron takes is shown live. See what it clicked, what it read, and why — full observability, no black box.",
+    name: "Full Observability",
+    desc: "Every click, every read, every decision — shown live in the panel. No black box. Interrupt or redirect mid-task anytime.",
   },
   {
     num: "06",
     icon: <CircleIcon />,
-    name: "Bring Your Model",
-    desc: "Your own API key, your own model. Claude, GPT-4o, Gemini, Mistral — no lock-in, no proxies, no data leaving your machine.",
+    name: "Model Agnostic",
+    desc: "Use Claude, GPT-4o, Gemini, or run local models with Ollama. Your API key, your choice. Zero vendor lock-in.",
   },
 ];
 
@@ -209,7 +209,10 @@ export default function Features() {
               key={feat.num}
               className="feat"
               variants={itemVariants}
-              whileHover={{ scale: 1.008 }}
+              whileHover={{ 
+                scale: 1.012,
+                transition: { type: "spring", stiffness: 400, damping: 25 }
+              }}
             >
               <div className="feat-top">
                 <div className="feat-icon">{feat.icon}</div>

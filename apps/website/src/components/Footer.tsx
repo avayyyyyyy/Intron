@@ -39,25 +39,57 @@ const LogoIcon = () => (
 export default function Footer() {
   return (
     <footer>
-      <div className="footer-logo">
-        <LogoIcon />
-        Intron
+      <div className="footer-left">
+        <div className="footer-logo">
+          <LogoIcon />
+          Intron
+        </div>
+        <div className="footer-built">
+          Built by{" "}
+          <a
+            href="https://shubhankit.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Shubhankit Jain
+          </a>
+          <span className="footer-social">
+            <a
+              href="https://x.com/shubhcodes"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              X
+            </a>
+            <a
+              href="https://github.com/shubhankiit"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              GitHub
+            </a>
+            <a
+              href="https://linkedin.com/in/shubhcodes"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              LinkedIn
+            </a>
+          </span>
+        </div>
       </div>
       <ul className="footer-links">
         <li>
-          <a href="#">Privacy</a>
-        </li>
-        <li>
-          <a href="#">Terms</a>
+          <a href="https://github.com/avayyyyyyy/Intron">GitHub</a>
         </li>
         <li>
           <a href="#">Docs</a>
         </li>
         <li>
-          <a href="https://intron.dev">intron.dev</a>
+          <a href="mailto:jabhi465@gmail.com">Contact</a>
         </li>
       </ul>
-      <span className="footer-copy">© 2026 Intron</span>
+      <span className="footer-copy">© {new Date().getFullYear()} Intron</span>
     </footer>
   );
 }

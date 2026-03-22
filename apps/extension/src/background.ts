@@ -53,35 +53,9 @@ chrome.action.onClicked.addListener(async (tab) => {
   }
 });
 
-// ─── Tab State Cache ──────────────────────────────────────────────────────────
+// ─── Tab Lifecycle ───────────────────────────────────────────────────────────
 
-interface TabState {
-  activeTabId: number | null;
-  activeTabUrl: string | null;
-}
-
-const tabStateCache = new Map<number, TabState>();
-
-function cacheTabState(tabId: number, url: string | null): void {
-  const state: TabState = { activeTabId: tabId, activeTabUrl: url };
-  tabStateCache.set(tabId, state);
-  chrome.storage.session.set({ activeTabId: tabId, activeTabUrl: url });
-}
-
-chrome.tabs.onActivated.addListener(async ({ tabId }) => {
-  try {
-    const tab = await chrome.tabs.get(tabId);
-    cacheTabState(tabId, tab.url || null);
-  } catch (error) {
-    console.error("Error handling tab activation:", error);
-  }
-});
-
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.url || changeInfo.status === "complete") {
-    cacheTabState(tabId, tab.url || null);
-  }
-  // Track group membership changes — enable/disable sidepanel accordingly
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   if ("groupId" in changeInfo) {
     if (changeInfo.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE) {
       // Tab left its group — disable sidepanel
@@ -109,9 +83,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  tabStateCache.delete(tabId);
   tabGroupMap.delete(tabId);
-  chrome.storage.session.remove([`tab_${tabId}`]);
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -151,30 +123,36 @@ async function getIntronTab(tabId?: number): Promise<chrome.tabs.Tab | null> {
   }
 }
 
-function injectScript<T>(
+async function injectScript<T>(
   tabId: number,
   func: (...args: any[]) => T,
   args?: any[],
 ): Promise<T> {
-  return chrome.scripting
-    .executeScript({
-      target: { tabId },
-      world: "ISOLATED",
-      func,
-      args: (args ?? []).map((a) => (a === undefined ? null : a)),
-    })
-    .then(([r]) => r.result as T);
+  const [r] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "ISOLATED",
+    func,
+    args: (args ?? []).map((a) => (a === undefined ? null : a)),
+  });
+  return r.result as T;
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 const handlers: Record<string, (payload: any) => Promise<any>> = {
   async CAPTURE_SCREENSHOT({ _sourceTabId }: { _sourceTabId?: number }) {
+    // captureVisibleTab captures whatever is visible in a window.
+    // If we know the source tab, find its window and capture that.
     if (_sourceTabId) {
-      const dataUrl = await chrome.tabs.captureTab(_sourceTabId, {
-        format: "png",
-      });
-      return { dataUrl };
+      try {
+        const tab = await chrome.tabs.get(_sourceTabId);
+        const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
+          format: "png",
+        });
+        return { dataUrl };
+      } catch {
+        // Tab may not be visible — fall through to default
+      }
     }
     const dataUrl = await chrome.tabs.captureVisibleTab({ format: "png" });
     return { dataUrl };
