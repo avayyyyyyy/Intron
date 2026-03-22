@@ -42,7 +42,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     // Fire-and-forget setOptions (no await) — keeps open() in gesture context
     chrome.sidePanel.setOptions({
       tabId: tab.id,
-      path: PANEL_PATH,
+      path: `${PANEL_PATH}?tabId=${tab.id}`,
       enabled: true,
     });
     // First await MUST be open() — Chrome requires user gesture on first async boundary
@@ -97,7 +97,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         if (group.title === "Intron") {
           await chrome.sidePanel.setOptions({
             tabId,
-            path: PANEL_PATH,
+            path: `${PANEL_PATH}?tabId=${tabId}`,
             enabled: true,
           });
         }

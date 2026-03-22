@@ -13,17 +13,17 @@ type View = "chat" | "settings";
 export default function App() {
   const [view, setView] = useState<View>("chat");
   const [settings, setSettings] = useState<Settings | null>(null);
-  const { clearMessages } = useChatStore();
+  const { newConversation } = useChatStore();
 
   useEffect(() => {
     getSettings().then(setSettings);
-    chrome.tabs.getCurrent().then((tab) => {
-      if (tab && tab.id) setSourceTabId(tab.id);
-    });
+    // Read tabId from URL param — set by background.ts when opening the sidepanel
+    const tabId = new URLSearchParams(window.location.search).get("tabId");
+    if (tabId) setSourceTabId(Number(tabId));
   }, []);
 
   const handleNewChat = () => {
-    clearMessages();
+    newConversation();
   };
 
   const handleModelChange = async (model: string) => {

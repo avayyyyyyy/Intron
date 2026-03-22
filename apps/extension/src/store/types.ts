@@ -28,10 +28,21 @@ export interface Message {
   createdAt: Date;
 }
 
+export interface Conversation {
+  id: string;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+  messageCount: number;
+}
+
 export interface ChatStoreState {
   messages: Message[];
   isStreaming: boolean;
   error: string | null;
+  activeConversationId: string;
+  conversations: Conversation[];
+
   addMessage: (message: Message) => void;
   appendPart: (messageId: string, part: MessagePart) => void;
   updateLastPart: (messageId: string, content: string) => void;
@@ -43,6 +54,9 @@ export interface ChatStoreState {
   setStreaming: (isStreaming: boolean) => void;
   setError: (error: string | null) => void;
   clearMessages: () => void;
+  newConversation: () => Promise<void>;
+  loadConversation: (id: string) => Promise<void>;
+  deleteConversation: (id: string) => Promise<void>;
 }
 
 export function getTextFromParts(parts: MessagePart[]): string {

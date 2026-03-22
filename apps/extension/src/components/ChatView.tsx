@@ -1,11 +1,12 @@
-import { useEffect, useRef } from "react";
-import { Plus, Settings as SettingsIcon, AlertCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Settings as SettingsIcon, AlertCircle, History, Trash2, MessageSquare } from "lucide-react";
 import { useChatStore } from "@/store/chat";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { useStreamingChat } from "@/hooks/useStreamingChat";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { formatRelativeTime } from "@/lib/utils";
 
 interface ChatViewProps {
   apiKey: string;
@@ -70,9 +71,7 @@ export function ChatView({
           <span>Intron</span>
         </div>
         <div className="header-controls">
-          <Button variant="ghost" size="icon" onClick={onNewChat} title="New chat">
-            <Plus />
-          </Button>
+          <ConversationMenu onNewChat={onNewChat} />
           <Button variant="ghost" size="icon" onClick={onSettings} title="Settings">
             <SettingsIcon />
           </Button>
@@ -135,31 +134,125 @@ function StreamingIndicator() {
 }
 
 function EmptyState({ onSend }: { onSend: (msg: string, images?: { dataUrl: string; mediaType: string }[]) => void }) {
-  const suggestions = [
-    { label: "Summarize this page", icon: "📄" },
-    { label: "Help me write", icon: "✍️" },
-    { label: "Find info on page", icon: "🔍" },
-    { label: "Fill a form", icon: "📝" },
-  ];
+  const { conversations, loadConversation } = useChatStore();
+  const recentChats = conversations.slice(0, 4);
+
   return (
     <div className="home">
       <div className="home-hero">
         <div className="home-eye" />
         <p className="home-tagline">What can I help with?</p>
       </div>
-      <div className="home-grid">
-        {suggestions.map((s) => (
+
+      {recentChats.length > 0 && (
+        <div className="home-recent">
+          <p className="home-section-label">Recent</p>
+          {recentChats.map((c) => (
+            <button
+              key={c.id}
+              className="home-recent-item"
+              onClick={() => loadConversation(c.id)}
+              type="button"
+            >
+              <MessageSquare size={12} />
+              <span className="home-recent-title">{c.title}</span>
+              <span className="home-recent-time">{formatRelativeTime(c.updatedAt)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="home-suggestions">
+        {["Summarize this page", "Help me write", "Find info", "Fill a form"].map((s) => (
           <button
-            key={s.label}
-            className="home-chip"
-            onClick={() => onSend(s.label)}
+            key={s}
+            className="home-chip-inline"
+            onClick={() => onSend(s)}
             type="button"
           >
-            <span className="home-chip-icon">{s.icon}</span>
-            <span>{s.label}</span>
+            {s}
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ConversationMenu({ onNewChat }: { onNewChat: () => void }) {
+  const [open, setOpen] = useState(false);
+  const { conversations, activeConversationId, loadConversation, deleteConversation } =
+    useChatStore();
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+
+  return (
+    <div className="conv-menu" ref={menuRef}>
+      <Button variant="ghost" size="icon" onClick={onNewChat} title="New chat">
+        <Plus />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setOpen((v) => !v)}
+        title="Chat history"
+      >
+        <History />
+      </Button>
+
+      {open && (
+        <div className="conv-dropdown">
+          <div className="conv-dropdown-header">
+            <span>Recent chats</span>
+          </div>
+          {conversations.length === 0 ? (
+            <div className="conv-empty">No previous chats</div>
+          ) : (
+            <div className="conv-list">
+              {conversations.map((c) => (
+                <div
+                  key={c.id}
+                  className={`conv-item ${c.id === activeConversationId ? "active" : ""}`}
+                >
+                  <button
+                    className="conv-item-btn"
+                    onClick={() => {
+                      loadConversation(c.id);
+                      setOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <MessageSquare size={12} />
+                    <span className="conv-title">{c.title}</span>
+                    <span className="conv-date">{formatRelativeTime(c.updatedAt)}</span>
+                  </button>
+                  <button
+                    className="conv-delete"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteConversation(c.id);
+                    }}
+                    type="button"
+                    title="Delete chat"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
