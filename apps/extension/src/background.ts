@@ -137,6 +137,24 @@ async function injectScript<T>(
   return r.result as T;
 }
 
+function waitForTabLoad(tabId: number, timeoutMs = 10_000): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); resolve(); }, timeoutMs);
+    function listener(id: number, info: { status?: string }) {
+      if (id === tabId && info.status === "complete") { clearTimeout(timer); chrome.tabs.onUpdated.removeListener(listener); resolve(); }
+    }
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+async function navigateTab(tabId: number, action: () => Promise<void>): Promise<{ success: true; currentUrl: string; pageTitle: string }> {
+  const loaded = waitForTabLoad(tabId);
+  await action();
+  await loaded;
+  const updated = await chrome.tabs.get(tabId);
+  return { success: true, currentUrl: updated.url ?? "", pageTitle: updated.title ?? "" };
+}
+
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 const handlers: Record<string, (payload: any) => Promise<any>> = {
@@ -170,51 +188,26 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     }));
   },
 
-  async NAVIGATE_TO({
-    url,
-    _sourceTabId,
-  }: {
-    url: string;
-    _sourceTabId?: number;
-  }) {
-    const tab =
-      (await getIntronTab(_sourceTabId)) ??
-      (await getSourceTab({ _sourceTabId }));
-    await chrome.tabs.update(tab.id!, { url });
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
-      }, 10_000);
-      function listener(updatedTabId: number, info: { status?: string }) {
-        if (updatedTabId === tab.id && info.status === "complete") {
-          clearTimeout(timer);
-          chrome.tabs.onUpdated.removeListener(listener);
-          resolve();
-        }
-      }
-      chrome.tabs.onUpdated.addListener(listener);
-    });
-    const updated = await chrome.tabs.get(tab.id!);
-    return { success: true, finalUrl: updated.url ?? url };
+  async NAVIGATE_TO({ url, _sourceTabId }: { url: string; _sourceTabId?: number }) {
+    const tab = (await getIntronTab(_sourceTabId)) ?? (await getSourceTab({ _sourceTabId }));
+    // Listener attached BEFORE tabs.update to avoid race on cached pages
+    const result = await navigateTab(tab.id!, () => chrome.tabs.update(tab.id!, { url }).then(() => {}));
+    return { success: true, finalUrl: result.currentUrl || url, pageTitle: result.pageTitle };
   },
 
   async GO_BACK(payload: { _sourceTabId?: number }) {
     const tab = await getSourceTab(payload);
-    await chrome.tabs.goBack(tab.id!);
-    return { success: true };
+    return navigateTab(tab.id!, () => chrome.tabs.goBack(tab.id!));
   },
 
   async GO_FORWARD(payload: { _sourceTabId?: number }) {
     const tab = await getSourceTab(payload);
-    await chrome.tabs.goForward(tab.id!);
-    return { success: true };
+    return navigateTab(tab.id!, () => chrome.tabs.goForward(tab.id!));
   },
 
   async RELOAD_PAGE(payload: { _sourceTabId?: number }) {
     const tab = await getSourceTab(payload);
-    await chrome.tabs.reload(tab.id!);
-    return { success: true };
+    return navigateTab(tab.id!, () => chrome.tabs.reload(tab.id!));
   },
 
   async CLICK_ELEMENT({
@@ -236,20 +229,30 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
         if (sel) {
           el = document.querySelectorAll(sel)[n] ?? null;
         } else if (txt) {
-          const walker = document.createTreeWalker(
-            document.body,
-            NodeFilter.SHOW_ELEMENT,
-          );
-          let count = 0;
+          // Single-pass text matching: collect own-text matches and full-text matches
+          // simultaneously, preferring own-text (innermost) over full textContent.
+          const ownTextMatches: Element[] = [];
+          const fullTextMatches: Element[] = [];
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
           while (walker.nextNode()) {
             const node = walker.currentNode as Element;
-            if (node.textContent?.trim() === txt) {
-              if (count === n) {
-                el = node;
-                break;
+            // Own text: direct text nodes only (no child element text)
+            let ownText = "";
+            for (let i = 0; i < node.childNodes.length; i++) {
+              const c = node.childNodes[i];
+              if (c.nodeType === Node.TEXT_NODE) {
+                const t = c.textContent?.trim();
+                if (t) ownText += (ownText ? " " : "") + t;
               }
-              count++;
             }
+            if (ownText === txt) ownTextMatches.push(node);
+            if (node.textContent?.trim() === txt) fullTextMatches.push(node);
+          }
+          if (ownTextMatches.length > n) {
+            el = ownTextMatches[n];
+          } else {
+            fullTextMatches.sort((a, b) => (a.innerHTML?.length ?? 0) - (b.innerHTML?.length ?? 0));
+            el = fullTextMatches[n] ?? null;
           }
         }
         if (!el)
@@ -257,11 +260,60 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
             success: false,
             message: `Element not found: ${sel ?? txt}`,
           };
-        (el as HTMLElement).focus();
-        (el as HTMLElement).click();
+
+        const htmlEl = el as HTMLElement;
+
+        const rect = htmlEl.getBoundingClientRect();
+        const style = window.getComputedStyle(htmlEl);
+        if (
+          rect.width === 0 ||
+          rect.height === 0 ||
+          style.display === "none" ||
+          style.visibility === "hidden"
+        ) {
+          return {
+            success: false,
+            message: `Element found but not visible: <${el.tagName.toLowerCase()}>`,
+          };
+        }
+
+        if (
+          rect.bottom < 0 ||
+          rect.top > window.innerHeight ||
+          rect.right < 0 ||
+          rect.left > window.innerWidth
+        ) {
+          htmlEl.scrollIntoView({ block: "center", behavior: "instant" });
+        }
+
+        // Dispatch full pointer + mouse event sequence matching real browser behavior:
+        // pointerdown → mousedown → [focus] → pointerup → mouseup → click
+        // Modern component libraries (Material UI, Radix, drag libs) need PointerEvents.
+        const center = htmlEl.getBoundingClientRect();
+        const cx = center.left + center.width / 2;
+        const cy = center.top + center.height / 2;
+        const shared = {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX: cx,
+          clientY: cy,
+          button: 0,
+        };
+
+        htmlEl.dispatchEvent(new PointerEvent("pointerdown", { ...shared, pointerId: 1, pointerType: "mouse" }));
+        htmlEl.dispatchEvent(new MouseEvent("mousedown", shared));
+        // Focus between mousedown and mouseup (matches real browser order)
+        htmlEl.focus();
+        htmlEl.dispatchEvent(new PointerEvent("pointerup", { ...shared, pointerId: 1, pointerType: "mouse" }));
+        htmlEl.dispatchEvent(new MouseEvent("mouseup", shared));
+        htmlEl.dispatchEvent(new MouseEvent("click", shared));
+
         return {
           success: true,
           message: `Clicked <${el.tagName.toLowerCase()}>`,
+          currentUrl: location.href,
+          pageTitle: document.title,
         };
       },
       [selector, text, nth],
@@ -287,24 +339,120 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
           ? document.querySelector<HTMLElement>(sel)
           : (document.activeElement as HTMLElement);
         if (!el) return { success: false, message: "No target element found" };
+
         el.focus();
+        el.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+
         const isInput = el instanceof HTMLInputElement;
         const isTextarea = el instanceof HTMLTextAreaElement;
+
+        // Input types that do NOT support setSelectionRange
+        const noSelectionTypes = new Set([
+          "number",
+          "date",
+          "month",
+          "week",
+          "time",
+          "datetime-local",
+          "color",
+          "range",
+          "hidden",
+        ]);
+
         if (isInput || isTextarea) {
-          const nativeSetter = Object.getOwnPropertyDescriptor(
-            isInput
+          if (clear) {
+            (el as HTMLInputElement).select();
+          } else {
+            // Move cursor to end — but only for types that support setSelectionRange.
+            // Calling it on type="number", "date", etc. throws a DOMException.
+            const inputType = (
+              (el as HTMLInputElement).type ?? "text"
+            ).toLowerCase();
+            if (!noSelectionTypes.has(inputType)) {
+              try {
+                const len = (el as HTMLInputElement).value.length;
+                (el as HTMLInputElement).setSelectionRange(len, len);
+              } catch {
+                // Swallow — some exotic types or custom elements may still throw
+              }
+            }
+          }
+
+          // Use execCommand('insertText') — this fires a trusted InputEvent
+          // with inputType 'insertText', which React, Angular, and Vue all
+          // properly detect and sync with. It also preserves the undo stack.
+          const inserted = document.execCommand("insertText", false, txt);
+
+          // Re-focus after execCommand — some browsers/sites blur the element
+          // during execCommand in the ISOLATED world. This is the root cause
+          // of the "input loses focus after typing" bug.
+          if (document.activeElement !== el) {
+            el.focus();
+          }
+
+          if (!inserted) {
+            // Fallback for rare cases where execCommand fails (e.g., some
+            // custom web components). Use nativeSetter + synthetic events.
+            const proto = isInput
               ? HTMLInputElement.prototype
-              : HTMLTextAreaElement.prototype,
-            "value",
-          )?.set;
-          const newValue = clear ? txt : (el as HTMLInputElement).value + txt;
-          nativeSetter?.call(el, newValue);
+              : HTMLTextAreaElement.prototype;
+            const nativeSetter = Object.getOwnPropertyDescriptor(
+              proto,
+              "value",
+            )?.set;
+            const newValue = clear
+              ? txt
+              : (el as HTMLInputElement).value + txt;
+            nativeSetter?.call(el, newValue);
+            el.dispatchEvent(
+              new InputEvent("input", {
+                bubbles: true,
+                cancelable: true,
+                inputType: "insertText",
+                data: txt,
+              }),
+            );
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+          } else {
+            // execCommand succeeded — still dispatch change for form validation
+            // and auto-save listeners that only watch 'change', not 'input'.
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+          }
         } else {
-          if (clear) el.textContent = txt;
-          else el.textContent = (el.textContent ?? "") + txt;
+          if (clear) {
+            // Select all content then replace
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+          } else {
+            // Move cursor to end
+            const selection = window.getSelection();
+            selection?.selectAllChildren(el);
+            selection?.collapseToEnd();
+          }
+
+          const inserted = document.execCommand("insertText", false, txt);
+
+          if (document.activeElement !== el) {
+            el.focus();
+          }
+
+          if (!inserted) {
+            if (clear) el.textContent = txt;
+            else el.textContent = (el.textContent ?? "") + txt;
+            el.dispatchEvent(
+              new InputEvent("input", {
+                bubbles: true,
+                cancelable: true,
+                inputType: "insertText",
+                data: txt,
+              }),
+            );
+          }
         }
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-        el.dispatchEvent(new Event("change", { bubbles: true }));
+
         return { success: true, message: `Typed ${txt.length} characters` };
       },
       [selector, text, clearFirst],
@@ -385,41 +533,25 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
         toSel: string | null,
         toPct: number | null,
       ) => {
-        // ── 1. scrollIntoView shortcut ──────────────────────────────────────
-        if (toSel) {
-          document
-            .querySelector(toSel)
-            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        function scrollInfo(target: Element | null, label: string) {
+          const st = target ? target.scrollTop : window.scrollY;
+          const sh = target ? target.scrollHeight : document.documentElement.scrollHeight;
+          const ch = target ? target.clientHeight : window.innerHeight;
+          const max = sh - ch;
           return {
-            success: true,
-            scrollY: window.scrollY,
-            container: "scrollIntoView",
+            success: true, scrollY: Math.round(st), scrollHeight: sh, viewportHeight: ch,
+            scrollPercent: max > 0 ? Math.round((st / max) * 100) : 100,
+            atTop: st <= 1, atBottom: st >= max - 1, container: label,
           };
         }
-
-        // ── 2. Find the real scrollable container ───────────────────────────
-        //
-        // The core problem: modern SPAs never scroll `window`. They use a deep
-        // overflow div. `window.scrollY` stays 0 forever on X.com, Gmail,
-        // Notion, Linear etc. We need to find THE element that is actually
-        // doing the scrolling.
-        //
-        // Strategy (ordered by cheapness):
-        //   A. Walk ancestors of document.activeElement (O(depth) — very fast)
-        //   B. Walk ancestors of the element under the viewport center (O(depth))
-        //   C. Full DOM scan → pick largest scrollable delta (O(n) — fallback)
-        //   D. window — last resort for plain documents
 
         const isVertical = dir === "up" || dir === "down";
 
         function isScrollable(el: Element): boolean {
           const style = window.getComputedStyle(el);
-          const overflow = isVertical ? style.overflowY : style.overflowX;
-          if (overflow !== "auto" && overflow !== "scroll") return false;
-          const scrollDelta = isVertical
-            ? el.scrollHeight - el.clientHeight
-            : el.scrollWidth - el.clientWidth;
-          return scrollDelta > 1;
+          const ov = isVertical ? style.overflowY : style.overflowX;
+          if (ov !== "auto" && ov !== "scroll") return false;
+          return (isVertical ? el.scrollHeight - el.clientHeight : el.scrollWidth - el.clientWidth) > 1;
         }
 
         function walkUp(start: Element | null): Element | null {
@@ -431,67 +563,57 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
           return null;
         }
 
-        // Strategy A — walk from active element
-        let container: Element | null = walkUp(document.activeElement);
+        function containerLabel(el: Element) { return el.tagName + (el.id ? `#${el.id}` : ""); }
 
-        // Strategy B — walk from element at viewport center
-        if (!container) {
-          const cx = window.innerWidth / 2;
-          const cy = window.innerHeight / 2;
-          const hit = document.elementFromPoint(cx, cy);
-          container = walkUp(hit);
+        // ── 1. scrollIntoView shortcut ──
+        if (toSel) {
+          const target = document.querySelector(toSel);
+          if (!target) return { success: false, error: `Element not found: ${toSel}` };
+          target.scrollIntoView({ behavior: "instant", block: "center" });
+          const ancestor = walkUp(target);
+          return scrollInfo(ancestor, ancestor ? containerLabel(ancestor) : "window");
         }
 
-        // Strategy C — full DOM scan, pick largest scrollable area
+        // ── 2. Find the real scrollable container ──
+
+        let container: Element | null = walkUp(document.activeElement);
+        if (!container) {
+          container = walkUp(document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2));
+        }
         if (!container) {
           let bestDelta = 0;
           for (const el of Array.from(document.querySelectorAll("*"))) {
             if (!isScrollable(el)) continue;
-            const delta = isVertical
-              ? el.scrollHeight - el.clientHeight
-              : el.scrollWidth - el.clientWidth;
-            if (delta > bestDelta) {
-              bestDelta = delta;
-              container = el;
-            }
+            const d = isVertical ? el.scrollHeight - el.clientHeight : el.scrollWidth - el.clientWidth;
+            if (d > bestDelta) { bestDelta = d; container = el; }
           }
         }
 
-        // ── 3. Scroll it ────────────────────────────────────────────────────
+        // ── 3. Scroll it (instant for consistent state reads) ───────────────
         const delta = dir === "up" || dir === "left" ? -amt : amt;
 
         if (container) {
           if (toPct !== null) {
-            const target =
-              ((container.scrollHeight - container.clientHeight) * toPct) / 100;
-            container.scrollTo({ top: target, behavior: "smooth" });
+            const target = ((container.scrollHeight - container.clientHeight) * toPct) / 100;
+            container.scrollTo({ top: target, behavior: "instant" });
           } else if (isVertical) {
-            container.scrollBy({ top: delta, behavior: "smooth" });
+            container.scrollBy({ top: delta, behavior: "instant" });
           } else {
-            container.scrollBy({ left: delta, behavior: "smooth" });
+            container.scrollBy({ left: delta, behavior: "instant" });
           }
-          return {
-            success: true,
-            scrollY: container.scrollTop,
-            container:
-              container.tagName + (container.id ? `#${container.id}` : ""),
-          };
+          return scrollInfo(container, containerLabel(container));
         }
 
-        // Strategy D — window fallback (plain documents, MDN, Wikipedia, etc.)
+        // Strategy D — window fallback
         if (toPct !== null) {
-          const maxScroll =
-            document.documentElement.scrollHeight - window.innerHeight;
-          window.scrollTo({
-            top: (maxScroll * toPct) / 100,
-            behavior: "smooth",
-          });
+          const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+          window.scrollTo({ top: (maxScroll * toPct) / 100, behavior: "instant" });
         } else if (isVertical) {
-          window.scrollBy({ top: delta, behavior: "smooth" });
+          window.scrollBy({ top: delta, behavior: "instant" });
         } else {
-          window.scrollBy({ left: delta, behavior: "smooth" });
+          window.scrollBy({ left: delta, behavior: "instant" });
         }
-        return { success: true, scrollY: window.scrollY, container: "window" };
+        return scrollInfo(null, "window");
       },
       args: [direction, amount, toSelector ?? null, toPercent ?? null],
     });
@@ -576,19 +698,45 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
           }
           if (f.type === "checkbox" || f.type === "radio") {
             (el as HTMLInputElement).checked = f.value === "true";
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+            el.dispatchEvent(new Event("change", { bubbles: true }));
           } else if (f.type === "select") {
             (el as HTMLSelectElement).value = f.value;
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+            el.dispatchEvent(new Event("change", { bubbles: true }));
           } else {
-            const proto =
-              el instanceof HTMLTextAreaElement
-                ? HTMLTextAreaElement.prototype
-                : HTMLInputElement.prototype;
-            const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-            if (setter) setter.call(el, f.value);
-            else (el as HTMLInputElement).value = f.value;
+            el.focus();
+            (el as HTMLInputElement).select(); // select all to replace
+            const inserted = document.execCommand(
+              "insertText",
+              false,
+              f.value,
+            );
+            if (!inserted) {
+              // Fallback: nativeSetter + synthetic events
+              const proto =
+                el instanceof HTMLTextAreaElement
+                  ? HTMLTextAreaElement.prototype
+                  : HTMLInputElement.prototype;
+              const setter = Object.getOwnPropertyDescriptor(
+                proto,
+                "value",
+              )?.set;
+              if (setter) setter.call(el, f.value);
+              else (el as HTMLInputElement).value = f.value;
+              el.dispatchEvent(
+                new InputEvent("input", {
+                  bubbles: true,
+                  cancelable: true,
+                  inputType: "insertText",
+                  data: f.value,
+                }),
+              );
+              el.dispatchEvent(new Event("change", { bubbles: true }));
+            } else {
+              el.dispatchEvent(new Event("change", { bubbles: true }));
+            }
           }
-          el.dispatchEvent(new Event("input", { bubbles: true }));
-          el.dispatchEvent(new Event("change", { bubbles: true }));
           filledCount++;
         }
         if (submitSel) document.querySelector<HTMLElement>(submitSel)?.click();
@@ -609,41 +757,103 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     return injectScript(
       tab.id!,
       (f: string) => {
+        const INTERACTIVE = [
+          "a[href]", "button", "input", "select", "textarea",
+          "[role='button']", "[role='link']", "[role='textbox']",
+          "[role='tab']", "[role='menuitem']", "[role='checkbox']",
+          "[role='switch']", "[role='combobox']", "[role='option']",
+          "[role='slider']", "[role='spinbutton']",
+          "[contenteditable='true']", "[contenteditable='']",
+          "[onclick]", "[tabindex]:not([tabindex='-1'])",
+        ].join(", ");
+
         const selectors: Record<string, string> = {
-          interactive:
-            'a, button, input, select, textarea, [role="button"], [onclick], [tabindex]',
-          inputs: "input, select, textarea",
-          links: "a[href]",
-          buttons:
-            'button, [role="button"], input[type="submit"], input[type="button"]',
-          all: "*",
+          interactive: INTERACTIVE,
+          inputs: "input, select, textarea, [role='textbox'], [role='combobox'], [contenteditable='true'], [contenteditable='']",
+          links: "a[href], [role='link']",
+          buttons: "button, [role='button'], input[type='submit'], input[type='button']",
+          all: "body *",
         };
         const query = selectors[f] ?? selectors.interactive;
-        return {
-          elements: Array.from(document.querySelectorAll(query))
-            .slice(0, 30)
-            .map((el) => {
-              const tag = el.tagName.toLowerCase();
-              const label =
-                (el as HTMLElement).innerText?.trim().slice(0, 80) ||
-                el.getAttribute("aria-label") ||
-                el.getAttribute("placeholder") ||
-                el.getAttribute("name") ||
-                el.getAttribute("id") ||
-                tag;
-              const id = el.id ? "#" + CSS.escape(el.id) : null;
-              const cls = el.classList.length
-                ? "." + Array.from(el.classList).map(CSS.escape).join(".")
-                : null;
-              return {
-                tag,
-                selector: id ?? cls ?? tag,
-                label,
-                type: (el as HTMLInputElement).type,
-                role: el.getAttribute("role") ?? undefined,
-              };
-            }),
-        };
+
+        function isVisible(el: Element): boolean {
+          const h = el as HTMLElement;
+          if (h.getAttribute("aria-hidden") === "true") return false;
+          const rect = h.getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) return false;
+          // Check display:none / visibility:hidden only if offsetParent is null
+          // (offsetParent is null for display:none, but also for fixed/sticky)
+          if (!h.offsetParent && h.style?.position !== "fixed" && h.style?.position !== "sticky") {
+            const cs = getComputedStyle(h);
+            if (cs.display === "none" || cs.visibility === "hidden") return false;
+          }
+          return true;
+        }
+
+        function getLabel(el: Element): string {
+          const h = el as HTMLElement;
+          const aria = el.getAttribute("aria-label");
+          if (aria) return aria.trim().slice(0, 100);
+          const ph = el.getAttribute("placeholder");
+          if (ph) return ph.trim().slice(0, 100);
+          const tag = el.tagName.toLowerCase();
+          if (tag === "input" || tag === "select" || tag === "textarea") {
+            return el.getAttribute("name") || el.getAttribute("id") || tag;
+          }
+          const text = h.innerText?.trim();
+          if (text) {
+            return text.length > 120 ? text.slice(0, 60) + "..." : text.slice(0, 100);
+          }
+          return el.getAttribute("title") || el.getAttribute("name") || el.getAttribute("id") || tag;
+        }
+
+        function buildSelector(el: Element): string {
+          const tag = el.tagName.toLowerCase();
+          // data-testid (most stable on SPAs like Twitter, LinkedIn)
+          const testId = el.getAttribute("data-testid");
+          if (testId) return `[data-testid="${CSS.escape(testId)}"]`;
+          // Stable ID (skip auto-generated ones with long numbers)
+          if (el.id && !/[0-9]{4,}/.test(el.id) && el.id.length < 80) {
+            return "#" + CSS.escape(el.id);
+          }
+          // aria-label attribute selector
+          const aria = el.getAttribute("aria-label");
+          if (aria && aria.length < 60) return `${tag}[aria-label="${CSS.escape(aria)}"]`;
+          // name attribute (form elements)
+          const name = el.getAttribute("name");
+          if (name) return `${tag}[name="${CSS.escape(name)}"]`;
+          // role + href for links
+          const role = el.getAttribute("role");
+          if (role) {
+            const href = el.getAttribute("href");
+            if (href && href.length < 80) return `${tag}[role="${role}"][href="${CSS.escape(href)}"]`;
+            return `${tag}[role="${role}"]`;
+          }
+          // href for regular links
+          if (tag === "a") {
+            const href = el.getAttribute("href");
+            if (href && href.length < 80) return `a[href="${CSS.escape(href)}"]`;
+          }
+          // type for inputs
+          if (tag === "input") return `input[type="${(el as HTMLInputElement).type}"]`;
+          return tag;
+        }
+
+        const MAX = 80;
+        const allMatches = document.querySelectorAll(query);
+        const elements = [];
+        for (const el of Array.from(allMatches)) {
+          if (elements.length >= MAX) break;
+          if (!isVisible(el)) continue;
+          elements.push({
+            tag: el.tagName.toLowerCase(),
+            selector: buildSelector(el),
+            label: getLabel(el),
+            type: (el as HTMLInputElement).type || undefined,
+            role: el.getAttribute("role") || undefined,
+          });
+        }
+        return { elements, totalMatched: allMatches.length };
       },
       [filter],
     );
@@ -745,13 +955,19 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
             const ok =
               el &&
               (!needsVisible || (el.offsetWidth > 0 && el.offsetHeight > 0));
-            if (ok)
+            if (ok) {
+              clearInterval(interval);
               return resolve({ found: true, elapsed: Date.now() - start });
-            if (Date.now() - start >= ms)
+            }
+            if (Date.now() - start >= ms) {
+              clearInterval(interval);
               return resolve({ found: false, elapsed: ms });
-            requestAnimationFrame(check);
+            }
           };
-          check();
+          check(); // immediate first check
+          // Use setInterval instead of requestAnimationFrame —
+          // rAF doesn't fire in background/inactive tabs
+          const interval = setInterval(check, 100);
         });
       },
       [selector, timeout, visible],
