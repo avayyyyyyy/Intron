@@ -1,134 +1,191 @@
-# Intron
+<p align="center">
+  <img src="apps/extension/icons/icon128.png" width="80" />
+</p>
 
-AI chat assistant in a Chrome side panel. Streaming responses, reasoning, tool calling — powered by OpenRouter and the Vercel AI SDK.
+<h1 align="center">Intron</h1>
 
-<img width="1800" height="947" alt="image" src="https://github.com/user-attachments/assets/c7d7969c-fa5a-4b41-9188-beb00d11c0f1" />
+<p align="center">
+  <strong>An AI agent that lives in your browser.</strong><br/>
+  <sub>Reads pages. Clicks buttons. Fills forms. Navigates sites. All from a side panel — with your real browser session.</sub>
+</p>
 
-## Features
+<p align="center">
+  <a href="https://github.com/avayyyyyyy/intron/stargazers"><img src="https://img.shields.io/github/stars/user/exten-agent?style=flat&color=orange" alt="GitHub stars" /></a>
+  <a href="https://github.com/avayyyyyyy/intron/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
+  <a href="https://openrouter.ai/"><img src="https://img.shields.io/badge/models-OpenRouter-blueviolet" alt="OpenRouter" /></a>
+</p>
 
-- **Side panel UI** — persistent chat pinned to the browser, works across tabs
-- **Streaming** — real-time token-by-token response via SSE
-- **Reasoning** — live thinking display for models that support it (auto-expands while streaming, collapses when text starts)
-- **Tool calling** — extensible tool infrastructure with `getTime` as the first example
-- **Model selector** — switch between models from the input bar
-- **Copy to clipboard** — hover any message to copy
-- **Dark theme** — Geist fonts, accent colors, smooth animations
+---
 
-## Setup
+<img width="1800" height="947" alt="Intron side panel demo" src="https://github.com/user-attachments/assets/c7d7969c-fa5a-4b41-9188-beb00d11c0f1" />
 
-### Prerequisites
+---
 
-- [Bun](https://bun.sh/) (or npm/yarn)
-- [OpenRouter](https://openrouter.ai/) API key
+## Why Intron?
 
-### Install
+Most AI browser agents run in a sandbox — a headless browser you can't see, can't control, and that doesn't have your logins. Intron takes the opposite approach.
+
+- **Real browser, not a sandbox.** Intron runs as a Chrome extension in your actual browser — with your cookies, your sessions, your context. No headless anything.
+- **You watch it work.** Every action streams live in the side panel. You see what it's doing, why, and can stop it anytime.
+- **Open source. Bring your own key.** Your API key talks directly to OpenRouter. No backend, no middleman, no data leaves your machine except the API calls you control.
+- **Any model.** Switch between Gemini, GPT, Qwen, MiniMax, and others via OpenRouter. One extension, 12+ models.
+- **18 real browser tools.** Not just chat. Intron clicks buttons, fills forms, extracts data, takes screenshots, navigates pages, and chains multi-step workflows.
+
+## Get started in 60 seconds
+
+### Option A: Build from source
 
 ```bash
-bun install
+git clone https://github.com/avayyyyyyy/intron.git && cd exten-agent
+bun install && bun run build:ext
 ```
 
-### Build
+Then load `apps/extension/dist/` as an unpacked extension in `chrome://extensions` (Developer mode on).
 
-```bash
-bun run build
-```
+### Option B: Download the latest release
 
-Output goes to `dist/`.
-
-### Load in Chrome
-
-1. Open `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked**
-4. Select the `dist/` folder
-5. Click the extension icon or press `Ctrl+Shift+X` to open the side panel
+> Coming soon — Chrome Web Store listing in progress.
 
 ### Configure
 
-1. Open the side panel
-2. Click the gear icon (Settings)
-3. Paste your OpenRouter API key
-4. Save — you're ready to chat
+1. Click the Intron icon (or press **Ctrl+Shift+X**) to open the side panel
+2. Open Settings, paste your [OpenRouter API key](https://openrouter.ai/keys)
+3. Pick a model, start chatting
 
-## Usage
+No server. No Docker. No config files.
 
-**Chat** — type a message and press Enter. Responses stream in real time.
+## What can it do?
 
-**Switch models** — use the dropdown below the input to pick a model. Changes persist.
+**Browse for you** — "Go to Amazon and find the cheapest USB-C hub with at least 4 ports."
 
-**Reasoning** — use a thinking-capable model (e.g., Gemini Flash, Claude with extended thinking). The "Thinking" toggle auto-opens during streaming and collapses when the model starts responding. Click to review after.
+**Fill forms** — "Fill out the job application on this page with my info: [name, email, etc.]"
 
-**Tools** — ask "What time is it?" to trigger the `getTime` tool. Tool cards show execution state and results.
+**Extract data** — "Scrape every product name and price from this search results page."
 
-**New chat** — click the `+` button in the header to clear the conversation.
+**Read & summarize** — "Summarize the key points of this article."
 
-## Architecture
+**Multi-step workflows** — "Log into my dashboard, go to settings, change my display name to Alex, and save."
+
+Every action happens in your real browser. Intron sees what you see.
+
+## Features
+
+**Streaming responses** — real-time token-by-token display. No waiting for a full plan.
+
+**Reasoning display** — live thinking for models that support it. Auto-expands while the model thinks, collapses when text starts.
+
+**18 browser tools** — screenshots, navigation, clicking, typing, scrolling, form filling, data extraction, DOM inspection, and more. All callable by the AI, all visible in the side panel.
+
+**Tab-scoped conversations** — each tab gets its own chat context. Switch tabs, switch conversations.
+
+**Multi-model support** — Gemini 3.1 Flash Lite, GPT-5.4 Nano, Qwen3 Coder, MiniMax M2.7, Nemotron 120B, and more via OpenRouter.
+
+**Vision-capable** — models with vision can see your screen via screenshots and make decisions based on what they see.
+
+**Production-grade safety** — comprehensive prompt injection defense, social engineering resistance, credential handling restrictions, and a three-tier action classification system (prohibited / requires permission / automatic).
+
+**Dark mode** — Geist fonts, polished UI, smooth animations.
+
+## How it works
 
 ```
-src/
-├── background.ts          # Service worker — tab tracking, side panel config
-├── App.tsx                # Root — view routing (chat / settings)
-├── components/
-│   ├── ChatView.tsx       # Message list + input + header controls
-│   ├── ChatMessage.tsx    # Single message — markdown, reasoning, tools, copy
-│   ├── ChatInput.tsx      # Textarea + send + model selector
-│   └── SettingsView.tsx   # API key input
-├── hooks/
-│   └── useStreamingChat.ts # AI SDK streamText + fullStream handler
-├── lib/
-│   ├── tools.ts           # Tool definitions (getTime, extendable)
-│   ├── models.ts          # OpenRouter model list
-│   └── settings.ts        # chrome.storage.sync wrapper
-├── store/
-│   ├── chat.ts            # Zustand store — messages, streaming state
-│   └── types.ts           # Message, ToolInvocation, ChatStoreState
-└── index.css              # Tailwind v4 + custom design tokens
+Chrome Extension (Manifest V3)
+├── Side Panel (React + Zustand)        ← You chat here
+│   ├── Streaming via Vercel AI SDK     ← Tokens arrive in real-time
+│   └── Tool calls render as cards      ← You see every action
+├── Background Service Worker            ← Manages tabs, routes messages
+│   ├── Tab group management            ← Each session gets its own group
+│   └── Tool execution handlers         ← 18 browser automation tools
+└── Content Scripts (ISOLATED world)     ← DOM access on any page
+    ├── Click, type, scroll, extract    ← Real browser interactions
+    └── execCommand for React compat    ← Works with any framework
 ```
 
-### Key decisions
+Your API key goes directly to OpenRouter via CORS. No backend server, no proxy, nothing in between.
 
-- **Vercel AI SDK** (`streamText` + `@openrouter/ai-sdk-provider`) — handles streaming, tool execution, and multi-step loops. No custom SSE parsing needed.
-- **Zustand** — lightweight state management for messages and streaming flags.
-- **Chrome side panel** — persistent UI without popup limitations. Tab-scoped state via background service worker.
-- **No backend** — OpenRouter allows CORS from browsers. API key stored in `chrome.storage.sync`. Everything runs client-side.
+## Tools reference
 
-## Adding tools
+| Category | Tools |
+|----------|-------|
+| **Observe** | `getScreenshot` `getPageContent` `getPageStructure` `getElementInfo` `getPageLinks` |
+| **Navigate** | `navigateTo` `goBack` `goForward` `reloadPage` |
+| **Interact** | `clickElement` `typeText` `pressKey` `hoverElement` `scrollPage` |
+| **Forms** | `fillForm` `selectOption` |
+| **Extract** | `extractData` |
+| **Wait** | `waitForElement` |
+| **Advanced** | `executeScript` (12 parameterized DOM operations, no eval) |
 
-Define a tool in `src/lib/tools.ts`:
+All tools return structured results the AI uses to decide its next step. Vision models also get screenshots for visual reasoning.
+
+## Extending Intron
+
+Add a tool in `apps/extension/src/lib/tools.ts`:
 
 ```typescript
 import { tool } from "ai";
 import { z } from "zod";
 
-export const agentTools = {
-  existingTool: tool({ ... }),
-
-  myNewTool: tool({
-    description: "What this tool does",
-    inputSchema: z.object({
-      param: z.string().describe("Description of param"),
-    }),
-    execute: async ({ param }) => {
-      return { result: "..." };
-    },
+const myTool = tool({
+  description: "What this tool does — one line",
+  inputSchema: z.object({
+    param: z.string().describe("What this param is for"),
   }),
-};
+  execute: async ({ param }) => {
+    return { result: "..." };
+  },
+});
 ```
 
-The AI SDK handles tool detection, execution, and result injection automatically. The model sees the result and can incorporate it into its response.
+Add the handler in `background.ts`, add the tool to the `agentTools` export, done. The AI SDK handles detection, execution, and result injection automatically.
 
 ## Tech stack
 
-| Layer      | Library                                       |
-| ---------- | --------------------------------------------- |
-| UI         | React 18, TypeScript                          |
-| State      | Zustand                                       |
-| AI         | Vercel AI SDK v6, @openrouter/ai-sdk-provider |
-| Validation | Zod                                           |
-| Styling    | Tailwind CSS v4, Geist fonts                  |
-| Build      | Vite 6, Bun                                   |
-| Icons      | Lucide React                                  |
+| Layer | Library |
+|-------|---------|
+| UI | React 18, TypeScript, Tailwind CSS v4 |
+| State | Zustand v5 |
+| AI | Vercel AI SDK v6, @openrouter/ai-sdk-provider |
+| Validation | Zod |
+| Fonts | Geist (sans + mono) |
+| Icons | Lucide React |
+| Build | Vite 6, Bun monorepo |
+| Components | Radix UI primitives |
+
+## Project structure
+
+```
+apps/
+├── extension/              # Chrome Extension (this is the product)
+│   ├── src/
+│   │   ├── background.ts   # Service worker — tool execution, tab management
+│   │   ├── components/      # React UI — chat, settings, message rendering
+│   │   ├── hooks/           # useStreamingChat — AI SDK integration
+│   │   ├── lib/             # agent.ts (prompt), tools.ts, models.ts, settings.ts
+│   │   └── store/           # Zustand — messages, streaming state, conversations
+│   └── manifest.json        # MV3 — sidePanel, tabs, scripting permissions
+└── website/                 # Landing page (Next.js, in progress)
+```
+
+## Roadmap
+
+- [ ] Chrome Web Store listing
+- [ ] Console & network debugging tools (diagnose why actions fail)
+- [ ] Natural language element finder ("click the login button")
+- [ ] Stable element ref system (survives scrolls and layout shifts)
+- [ ] Multi-tab support (research across tabs in parallel)
+- [ ] Task/plan management UI (visual progress tracking)
+- [ ] One-click recording → replayable workflows
+
+## Contributing
+
+Contributions welcome. If you're fixing a bug or adding a tool, open a PR. For larger changes, open an issue first so we can discuss the approach.
+
+```bash
+bun install          # install deps
+bun run dev:ext      # dev mode with hot reload
+bun run build:ext    # production build
+```
 
 ## License
 
-Private
+MIT
