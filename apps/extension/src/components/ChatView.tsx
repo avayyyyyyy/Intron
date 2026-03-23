@@ -33,7 +33,6 @@ export function ChatView({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Track if user is near bottom (within 150px)
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;
@@ -45,12 +44,11 @@ export function ChatView({
     return () => list.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Scroll on new message
   useEffect(() => {
     scrollToBottom();
   }, [messages.length]);
 
-  // Auto-scroll during streaming if user is near bottom
+  // Auto-scroll during streaming — intentionally runs every render
   useEffect(() => {
     if (isStreaming && isNearBottomRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
@@ -148,8 +146,9 @@ function EmptyState({ onSend }: { onSend: (msg: string, images?: { dataUrl: stri
         <div className="home-recent">
           <p className="home-section-label">Recent</p>
           {recentChats.map((c) => (
-            <button
+            <Button
               key={c.id}
+              variant="ghost"
               className="home-recent-item"
               onClick={() => loadConversation(c.id)}
               type="button"
@@ -157,21 +156,23 @@ function EmptyState({ onSend }: { onSend: (msg: string, images?: { dataUrl: stri
               <MessageSquare size={12} />
               <span className="home-recent-title">{c.title}</span>
               <span className="home-recent-time">{formatRelativeTime(c.updatedAt)}</span>
-            </button>
+            </Button>
           ))}
         </div>
       )}
 
       <div className="home-suggestions">
         {["Summarize this page", "Help me write", "Find info", "Fill a form"].map((s) => (
-          <button
+          <Button
             key={s}
+            variant="outline"
+            size="xs"
             className="home-chip-inline"
             onClick={() => onSend(s)}
             type="button"
           >
             {s}
-          </button>
+          </Button>
         ))}
       </div>
     </div>
@@ -184,17 +185,17 @@ function ConversationMenu({ onNewChat }: { onNewChat: () => void }) {
     useChatStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Close on click outside
   useEffect(() => {
     if (!open) return;
-    function handleClick(e: MouseEvent) {
+    const handle = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
   }, [open]);
-
 
   return (
     <div className="conv-menu" ref={menuRef}>
@@ -212,11 +213,9 @@ function ConversationMenu({ onNewChat }: { onNewChat: () => void }) {
 
       {open && (
         <div className="conv-dropdown">
-          <div className="conv-dropdown-header">
-            <span>Recent chats</span>
-          </div>
+          <div className="conv-dropdown-header">Recent chats</div>
           {conversations.length === 0 ? (
-            <div className="conv-empty">No previous chats</div>
+            <div className="conv-empty-msg">No previous chats</div>
           ) : (
             <div className="conv-list">
               {conversations.map((c) => (
@@ -238,10 +237,7 @@ function ConversationMenu({ onNewChat }: { onNewChat: () => void }) {
                   </button>
                   <button
                     className="conv-delete"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteConversation(c.id);
-                    }}
+                    onClick={() => deleteConversation(c.id)}
                     type="button"
                     title="Delete chat"
                   >

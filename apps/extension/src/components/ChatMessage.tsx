@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { Brain, ChevronRight, Copy, Check } from "lucide-react";
 import type { Message, MessagePart } from "@/store/types";
 import { getTextFromParts } from "@/store/types";
+import { Button } from "@/components/ui/button";
 
 interface ChatMessageProps {
   message: Message;
@@ -184,7 +185,9 @@ export function ChatMessage({
             const isOpen = isReasoningOpen(index);
             return (
               <div key={index}>
-                <button
+                <Button
+                  variant="ghost"
+                  size="xs"
                   className={`reasoning-toggle ${isOpen ? "open" : ""}`}
                   onClick={() => toggleReasoning(index)}
                   type="button"
@@ -192,7 +195,7 @@ export function ChatMessage({
                   <Brain />
                   <span>{isStreaming ? "Thinking..." : "Thinking"}</span>
                   <ChevronRight className="chevron" />
-                </button>
+                </Button>
                 <div className={`reasoning-wrapper ${isOpen ? "visible" : ""}`}>
                   <div className="reasoning-inner">
                     <div className="reasoning-content">
@@ -243,14 +246,16 @@ export function ChatMessage({
       })}
 
       {hasContent && !isActivelyStreaming && (
-        <button
+        <Button
+          variant="ghost"
+          size="icon-xs"
           className="copy-btn"
           onClick={handleCopy}
           type="button"
           aria-label="Copy message"
         >
           {copied ? <Check /> : <Copy />}
-        </button>
+        </Button>
       )}
     </div>
   );

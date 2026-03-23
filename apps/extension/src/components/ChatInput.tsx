@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, ChevronDown, Pause, ImagePlus, X } from "lucide-react";
+import { Send, Pause, ImagePlus, X, ChevronDown } from "lucide-react";
 import { OPENROUTER_MODELS, getModelCapabilities } from "@/lib/models";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 
 interface ChatInputProps {
   onSend: (
@@ -111,13 +112,15 @@ export function ChatInput({
           className="border-0 resize-none focus-visible:ring-0 w-full"
         />
         <div className="textarea-row">
-          <button
+          <Button
+            variant="ghost"
+            size="icon-xs"
             className="upload-btn"
             onClick={() => fileInputRef.current?.click()}
             type="button"
           >
             <ImagePlus size={16} />
-          </button>
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
@@ -126,27 +129,31 @@ export function ChatInput({
             className="sr-only"
             onChange={handleFileSelect}
           />
-          <button
+          <Button
+            variant="ghost"
+            size="icon-xs"
             className="upload-btn"
             onClick={isStreaming ? onAbort : handleSubmit}
             disabled={!isStreaming && !value.trim() && images.length === 0}
             type="button"
           >
             {isStreaming ? <Pause size={16} /> : <Send size={16} />}
-          </button>
+          </Button>
         </div>
         {images.length > 0 && (
           <div className="image-preview-row">
             {images.map((img, i) => (
               <div key={i} className="image-preview">
                 <img src={img.dataUrl} alt={img.name} />
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
                   className="image-remove"
                   onClick={() => removeImage(i)}
                   type="button"
                 >
                   <X size={10} />
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -158,7 +165,7 @@ export function ChatInput({
         )}
         <div className="model-row">
           <div className="model-selector">
-            <ChevronDown />
+            <ChevronDown size={11} />
             <select
               value={model}
               onChange={(e) => onModelChange(e.target.value)}

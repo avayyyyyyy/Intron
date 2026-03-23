@@ -6,10 +6,31 @@ import { getTextFromParts } from "./types";
 // ─── Chrome Storage Adapter ──────────────────────────────────────────────────
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingWrite: { key: string; value: string } | null = null;
+
+function flushPendingWrite() {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  if (pendingWrite) {
+    chrome.storage.local.set({ [pendingWrite.key]: pendingWrite.value });
+    pendingWrite = null;
+    debounceTimer = null;
+  }
+}
+
+// Flush on page unload so fire-and-forget saves don't get lost
+window.addEventListener("beforeunload", flushPendingWrite);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") flushPendingWrite();
+});
 
 const chromeStorage: StateStorage = {
   getItem: (key) =>
     new Promise((resolve) => {
+      // If there's a pending write for this key, return it directly (avoid stale read)
+      if (pendingWrite?.key === key) {
+        resolve(pendingWrite.value);
+        return;
+      }
       chrome.storage.local.get(key, (result) =>
         resolve((result[key] ?? null) as string | null),
       );
@@ -17,10 +38,11 @@ const chromeStorage: StateStorage = {
   // Debounced writes — coalesces rapid streaming updates into one IPC
   setItem: (key, value) =>
     new Promise<void>((resolve) => {
+      pendingWrite = { key, value };
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        chrome.storage.local.set({ [key]: value }, resolve);
-        debounceTimer = null;
+        flushPendingWrite();
+        resolve();
       }, 500);
     }),
   removeItem: (key) =>
@@ -62,7 +84,11 @@ function trimForStorage(messages: Message[]): Message[] {
 
 async function saveMessages(conversationId: string, messages: Message[]) {
   const trimmed = trimForStorage(messages);
-  await chromeStorage.setItem(chatKey(conversationId), JSON.stringify(trimmed));
+  // Write immediately — bypass the debounced storage adapter since this is
+  // a deliberate user action (new chat, switch conversation), not streaming.
+  await new Promise<void>((resolve) => {
+    chrome.storage.local.set({ [chatKey(conversationId)]: JSON.stringify(trimmed) }, resolve);
+  });
 }
 
 async function loadMessages(conversationId: string): Promise<Message[]> {
@@ -148,19 +174,25 @@ export const useChatStore = create<ChatStoreState>()(
       setError: (error: string | null) => set({ error }),
       clearMessages: () => set({ messages: [], error: null }),
 
-      newConversation: async () => {
+      newConversation: () => {
         const { messages, activeConversationId, conversations } = get();
 
+        // Update UI instantly — don't wait for storage
+        const newId = generateId();
+        const updatedConversations = messages.length > 0
+          ? saveCurrentToList(messages, activeConversationId, conversations)
+          : conversations;
+
+        set({
+          messages: [],
+          error: null,
+          activeConversationId: newId,
+          conversations: updatedConversations,
+        });
+
+        // Save old conversation to storage in background (fire-and-forget)
         if (messages.length > 0) {
-          await saveMessages(activeConversationId, messages);
-          set({
-            messages: [],
-            error: null,
-            activeConversationId: generateId(),
-            conversations: saveCurrentToList(messages, activeConversationId, conversations),
-          });
-        } else {
-          set({ messages: [], error: null, activeConversationId: generateId() });
+          saveMessages(activeConversationId, messages);
         }
       },
 

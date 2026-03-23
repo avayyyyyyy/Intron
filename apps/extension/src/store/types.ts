@@ -54,7 +54,7 @@ export interface ChatStoreState {
   setStreaming: (isStreaming: boolean) => void;
   setError: (error: string | null) => void;
   clearMessages: () => void;
-  newConversation: () => Promise<void>;
+  newConversation: () => void;
   loadConversation: (id: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
 }
