@@ -36,7 +36,7 @@ Most AI browser agents run in a sandbox — a headless browser you can't see, ca
 ### Option A: Build from source
 
 ```bash
-git clone https://github.com/avayyyyyyy/intron.git && cd exten-agent
+git clone https://github.com/avayyyyyyy/intron.git && cd intron
 bun install && bun run build:ext
 ```
 
