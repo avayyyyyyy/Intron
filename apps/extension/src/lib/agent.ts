@@ -376,6 +376,8 @@ export function createAgent(
     getModelName(model),
   );
 
+  let lastSeenUrl: string | undefined;
+
   return new ToolLoopAgent({
     model: openrouter.chat(model),
     instructions: staticPrompt,
@@ -392,10 +394,18 @@ export function createAgent(
         minute: "2-digit",
       });
 
+      // Detect navigation between steps
+      let navigationNotice = "";
+      if (lastSeenUrl && pageContext?.url && pageContext.url !== lastSeenUrl) {
+        navigationNotice = `\nPage navigated from ${lastSeenUrl} to ${pageContext.url}. The page content has changed — consider re-reading with getPageContent.`;
+      }
+      lastSeenUrl = pageContext?.url;
+
       let dynamicBlock = `\n<current_context>\nDate: ${now}`;
       if (pageContext) {
         dynamicBlock += `\nPage URL: ${pageContext.url}\nPage Title: ${pageContext.title}`;
       }
+      if (navigationNotice) dynamicBlock += navigationNotice;
       dynamicBlock += `\nStep: ${stepNumber}\n</current_context>`;
 
       if (originalGoal && stepNumber > 2) {

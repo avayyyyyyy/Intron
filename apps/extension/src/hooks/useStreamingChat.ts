@@ -4,7 +4,7 @@ import { useChatStore } from "@/store/chat";
 import { type AgentTools } from "@/lib/tools";
 import { createAgent } from "@/lib/agent";
 import { sendToBackground } from "@/lib/messaging";
-import type { Message, MessagePart } from "@/store/types";
+import type { MessagePart } from "@/store/types";
 import { getTextFromParts } from "@/store/types";
 
 interface UseStreamingChatOptions {
@@ -105,8 +105,25 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
       return;
     }
 
+    // Append page URL only on first message or when URL changed since it was last sent
+    const pageInfo = await sendToBackground("GET_TAB_INFO").catch(() => null);
+    let lastSentUrl: string | undefined;
+    const { messages: currentMessages } = useChatStore.getState();
+    for (let i = currentMessages.length - 1; i >= 0; i--) {
+      const msg = currentMessages[i];
+      if (msg.role !== "user") continue;
+      const text = msg.parts.find((p): p is Extract<MessagePart, { type: "text" }> => p.type === "text")?.content ?? "";
+      const match = text.match(/\[Current page: (.+)\]$/);
+      if (match) { lastSentUrl = match[1]; break; }
+    }
+    const shouldAppendUrl = pageInfo?.url && pageInfo.url !== lastSentUrl;
+
+    const messageText = shouldAppendUrl
+      ? `${content}\n\n[Current page: ${pageInfo!.url}]`
+      : content;
+
     const userParts: MessagePart[] = [];
-    if (content.trim()) userParts.push({ type: "text", content });
+    if (messageText.trim()) userParts.push({ type: "text", content: messageText });
     for (const img of images ?? []) {
       userParts.push({
         type: "image",
@@ -115,13 +132,12 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
       });
     }
 
-    const userMessage: Message = {
+    addMessage({
       id: crypto.randomUUID(),
       role: "user",
       parts: userParts,
       createdAt: new Date(),
-    };
-    addMessage(userMessage);
+    });
 
     const assistantId = crypto.randomUUID();
     addMessage({

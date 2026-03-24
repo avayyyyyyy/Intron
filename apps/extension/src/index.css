@@ -130,6 +130,7 @@ body {
 
 .chat-body {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -290,6 +291,7 @@ body {
 
 .message-list {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
   padding: var(--space-3) var(--space-4);
   display: flex;
@@ -318,6 +320,7 @@ body {
   display: flex;
   flex-direction: column;
   max-width: 100%;
+  min-width: 0;
   animation: messageIn 200ms ease-out;
 }
 
@@ -377,8 +380,8 @@ body {
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   line-height: 1.6;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .message.user .message-content {
