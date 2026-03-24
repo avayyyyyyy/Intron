@@ -273,6 +273,30 @@ const executeScript = tool({
   execute: async (args) => sendToBackground("EXECUTE_SCRIPT", args as Record<string, unknown>),
 });
 
+const todoWrite = tool({
+  description:
+    `Create and manage a visible task list for multi-step browser work. The user sees this list in real time. ` +
+    `REQUIRED: Call BEFORE starting a multi-step task, then call AGAIN with the SAME sessionId after EVERY step completion to update statuses. ` +
+    `Never leave stale statuses — always mark completed tasks as "completed" and move the next to "in_progress" immediately. ` +
+    `Frame tasks as outcomes ("Find cheapest flight") not steps ("Click button"). Only 1 task in_progress at a time. ` +
+    `Call one final time with overallStatus "completed" when all tasks are done.`,
+  inputSchema: z.object({
+    sessionId: z.string().describe("Stable UUID for this task list. Reuse when updating, new UUID for new tasks."),
+    overallStatus: z.enum(["in_progress", "completed"]).describe("in_progress if any tasks pending/active; completed when all done"),
+    todos: z.array(z.object({
+      content: z.string().describe("Outcome-focused task description"),
+      status: z.enum(["pending", "in_progress", "completed", "interrupted", "cancelled"]),
+      activeForm: z.string().optional().describe("Present-continuous description of current work, e.g. 'Searching for flights'"),
+      statusContext: z.string().optional().describe("Brief context for interrupted/completed status"),
+    })).describe("The full task list with updated statuses"),
+  }),
+  execute: async (args) => {
+    // This is a UI-only tool — the streaming hook intercepts the result
+    // to render the task list in the chat. No background message needed.
+    return { success: true, ...args };
+  },
+});
+
 export const agentTools = {
   getScreenshot,
   getPageContent,
@@ -293,6 +317,7 @@ export const agentTools = {
   waitForElement,
   extractData,
   executeScript,
+  todoWrite,
 };
 
 export type AgentTools = typeof agentTools;
@@ -319,6 +344,7 @@ export const TOOL_META: Record<ToolName, { label: string; iconName: string }> =
     waitForElement: { label: "Wait for element", iconName: "Timer" },
     extractData: { label: "Extract data", iconName: "Database" },
     executeScript: { label: "Run script", iconName: "Terminal" },
+    todoWrite: { label: "Task list", iconName: "CheckSquare" },
   };
 
 const { getScreenshot: _gs, ...toolsWithoutScreenshot } = agentTools;

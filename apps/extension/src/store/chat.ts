@@ -170,6 +170,23 @@ export const useChatStore = create<ChatStoreState>()(
           ),
         })),
 
+      updateTaskList: (messageId: string, sessionId: string, part: Extract<MessagePart, { type: "task-list" }>) =>
+        set((state) => ({
+          messages: state.messages.map((msg) => {
+            if (msg.id !== messageId) return msg;
+            // Replace existing task-list with same sessionId, or append
+            const existingIdx = msg.parts.findIndex(
+              (p) => p.type === "task-list" && p.sessionId === sessionId,
+            );
+            if (existingIdx >= 0) {
+              const parts = [...msg.parts];
+              parts[existingIdx] = part;
+              return { ...msg, parts };
+            }
+            return { ...msg, parts: [...msg.parts, part] };
+          }),
+        })),
+
       setStreaming: (isStreaming: boolean) => set({ isStreaming }),
       setError: (error: string | null) => set({ error }),
       clearMessages: () => set({ messages: [], error: null }),

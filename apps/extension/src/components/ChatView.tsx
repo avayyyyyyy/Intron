@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Plus, Settings as SettingsIcon, AlertCircle, History, Trash2, MessageSquare } from "lucide-react";
+import { useEffect, useRef, useState, useMemo } from "react";
+import { Plus, Settings as SettingsIcon, AlertCircle, History, Trash2, MessageSquare, Circle, CheckCircle2, Loader2, PauseCircle, XCircle } from "lucide-react";
 import { useChatStore } from "@/store/chat";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
@@ -7,6 +7,7 @@ import { useStreamingChat } from "@/hooks/useStreamingChat";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatRelativeTime } from "@/lib/utils";
+import type { Message } from "@/store/types";
 
 interface ChatViewProps {
   apiKey: string;
@@ -109,6 +110,7 @@ export function ChatView({
           <div ref={messagesEndRef} />
         </div>
 
+        <TaskBar messages={messages} />
         <ChatInput
           onSend={sendMessage}
           isStreaming={isStreaming}
@@ -185,7 +187,6 @@ function ConversationMenu({ onNewChat }: { onNewChat: () => void }) {
     useChatStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close on click outside
   useEffect(() => {
     if (!open) return;
     const handle = (e: MouseEvent) => {
@@ -249,6 +250,61 @@ function ConversationMenu({ onNewChat }: { onNewChat: () => void }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+const TASK_ICONS: Record<string, React.ReactNode> = {
+  pending: <Circle size={11} />,
+  in_progress: <Loader2 size={11} className="task-spinner" />,
+  completed: <CheckCircle2 size={11} />,
+  interrupted: <PauseCircle size={11} />,
+  cancelled: <XCircle size={11} />,
+};
+
+function TaskBar({ messages }: { messages: Message[] }) {
+  const taskList = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      for (let j = messages[i].parts.length - 1; j >= 0; j--) {
+        const part = messages[i].parts[j];
+        if (part.type === "task-list") return part;
+      }
+    }
+    return null;
+  }, [messages]);
+
+  if (!taskList) return null;
+
+  let activeTask: (typeof taskList.tasks)[number] | undefined;
+  let completedCount = 0;
+  let allTerminal = taskList.tasks.length > 0;
+  for (const t of taskList.tasks) {
+    if (t.status === "in_progress") activeTask = t;
+    if (t.status === "completed") completedCount++;
+    if (t.status !== "completed" && t.status !== "cancelled") allTerminal = false;
+  }
+
+  if (taskList.overallStatus === "completed" || allTerminal) return null;
+
+  return (
+    <div className="taskbar">
+      <div className="taskbar-summary">
+        <Loader2 size={12} className="task-spinner" />
+        <span className="taskbar-active">
+          {activeTask?.activeForm ?? activeTask?.content ?? "Working..."}
+        </span>
+        <span className="taskbar-progress">{completedCount}/{taskList.tasks.length}</span>
+      </div>
+      <div className="taskbar-expand">
+        <div className="taskbar-expand-inner">
+          {taskList.tasks.map((task, i) => (
+            <div key={i} className={`taskbar-item ${task.status}`}>
+              <span className="taskbar-item-icon">{TASK_ICONS[task.status]}</span>
+              <span className="taskbar-item-text">{task.content}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

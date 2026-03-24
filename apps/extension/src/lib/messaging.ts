@@ -124,6 +124,10 @@ export interface BackgroundMessages {
     };
     response: { result: unknown; error?: string };
   };
+  GET_TAB_INFO: {
+    payload: Record<string, never>;
+    response: { url: string; title: string };
+  };
 }
 
 export function sendToBackground<T extends MessageType>(

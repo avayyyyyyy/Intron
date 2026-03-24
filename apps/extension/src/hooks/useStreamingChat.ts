@@ -82,6 +82,7 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
     appendPart,
     updateLastPart,
     replacePart,
+    updateTaskList,
     setStreaming,
     setError,
   } = useChatStore();
@@ -137,15 +138,16 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
     abortRef.current = controller;
 
     try {
-      let pageContext: { url: string; title: string } | undefined;
-      try {
-        const pageContent = await sendToBackground("GET_PAGE_CONTENT");
-        pageContext = { url: pageContent.url, title: pageContent.title };
-      } catch {
-        // Page context unavailable (e.g., chrome:// page)
-      }
+      const fetchPageContext = async () => {
+        try {
+          const tab = await sendToBackground("GET_TAB_INFO");
+          return { url: tab.url, title: tab.title };
+        } catch {
+          return undefined;
+        }
+      };
 
-      const agent = createAgent(apiKey, model, pageContext);
+      const agent = createAgent(apiKey, model, fetchPageContext, content);
 
       const coreMessages: ModelMessage[] = useChatStore
         .getState()
@@ -211,6 +213,18 @@ export function useStreamingChat({ apiKey, model }: UseStreamingChatOptions) {
               toolName,
               result: output,
             });
+            // Intercept todoWrite results to render the task list UI
+            if (toolName === "todoWrite" && output && typeof output === "object") {
+              const o = output as { sessionId?: string; overallStatus?: string; todos?: unknown[] };
+              if (o.sessionId && o.todos) {
+                updateTaskList(assistantId, o.sessionId, {
+                  type: "task-list",
+                  sessionId: o.sessionId,
+                  overallStatus: (o.overallStatus === "completed" ? "completed" : "in_progress"),
+                  tasks: o.todos as Extract<MessagePart, { type: "task-list" }>["tasks"],
+                });
+              }
+            }
           },
           onError(error) {
             setError(String(error));

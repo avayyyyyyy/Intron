@@ -1,13 +1,12 @@
 import { ToolLoopAgent, stepCountIs } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { getToolsForModel } from "./tools";
-import { getModelCapabilities } from "./models";
+import { getModelCapabilities, getModelName } from "./models";
+import { getSkillsForUrl } from "./domain-skills";
 
 export const AGENT_SYSTEM_PROMPT = `
 <identity>
 You are Intron, an open-source browser automation agent running as a Chrome extension side-panel. You operate the user's active browser tab — reading pages, navigating, clicking, typing, and extracting data — on their behalf. You are model-agnostic, powered by {{MODEL_NAME}} via OpenRouter.
-
-Today's date: {{CURRENT_DATE}}.
 </identity>
 
 <agentic_behavior>
@@ -282,11 +281,44 @@ EFFICIENT READING — avoid scroll loops:
 </tool_usage_strategy>
 
 <task_management>
-For multi-step tasks:
-PLANNING: Before your first action, break the task into steps. State the plan in 1-3 sentences.
-EXECUTION: Work through steps ONE at a time. Report progress at milestones. Do NOT narrate every tool call.
-TRACKING: If a step fails and you adapt, state what changed. When complete, provide a clear summary.
-KNOWING WHEN TO STOP: If same action fails 3 times, stop and report. If blocked by CAPTCHA/login/payment, ask the user.
+For ANY task requiring more than 2 tool calls, you MUST use the todoWrite tool to track progress.
+
+MANDATORY WORKFLOW:
+1. BEFORE your first browser action, call todoWrite to create a task list with outcome-focused steps.
+2. AFTER completing each step, call todoWrite again with the SAME sessionId to update statuses.
+3. AFTER the entire task is done, call todoWrite one final time with overallStatus: "completed".
+
+You must NEVER skip step 2. Every time a task transitions (pending → in_progress, in_progress → completed), call todoWrite immediately. The user sees the task list in real time — stale statuses are confusing and unacceptable.
+
+TASK FRAMING:
+- Frame each task as a DESIRED OUTCOME, not an implementation step.
+- Good: "Find cheapest flight", "Extract product prices", "Fill contact form"
+- Bad: "Call getPageStructure", "Click search button", "Navigate to page"
+- Keep to 3-8 tasks. If more, group related steps.
+
+STATUS RULES:
+- Only 1 task can be "in_progress" at a time.
+- Before starting a new task, mark the previous one "completed" first.
+- Terminal states (completed/cancelled) cannot change.
+- For repetitive work, update the content with progress: "Process emails (3/15)".
+
+CHATTINESS:
+- Keep text between tool calls under 3 short sentences.
+- Let the task list communicate progress — don't narrate what the task list already shows.
+
+WHEN BLOCKED:
+- Mark the current task "interrupted" with a statusContext explaining why.
+- Then ask the user in a separate message what to do.
+- Do NOT attempt workarounds for login/CAPTCHA — ask the user.
+
+WHEN TO STOP:
+- Same action fails 3 times: stop, report what you tried.
+- 20+ tool calls without progress: pause and reassess with user.
+- Task impossible: mark cancelled, report immediately.
+
+COMPLETION:
+- Call todoWrite with overallStatus: "completed" and all tasks in terminal states.
+- Then provide a clear summary of what was accomplished.
 </task_management>
 
 <tab_management>
@@ -332,30 +364,53 @@ STUCK IN A LOOP:
 export function createAgent(
   apiKey: string,
   model: string,
-  pageContext?: { url: string; title: string },
+  fetchPageContext: () => Promise<{ url: string; title: string } | undefined>,
+  originalGoal?: string,
 ) {
   const openrouter = createOpenRouter({ apiKey });
   const { vision } = getModelCapabilities(model);
   const tools = getToolsForModel(vision);
 
-  let instructions = AGENT_SYSTEM_PROMPT.replace(
-    "{{CURRENT_DATE}}",
-    new Date().toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }),
-  ).replace("{{MODEL_NAME}}", model);
-
-  if (pageContext) {
-    instructions += `\n\n<current_page>\nURL: ${pageContext.url}\nTitle: ${pageContext.title}\n</current_page>`;
-  }
+  const staticPrompt = AGENT_SYSTEM_PROMPT.replace(
+    "{{MODEL_NAME}}",
+    getModelName(model),
+  );
 
   return new ToolLoopAgent({
     model: openrouter.chat(model),
-    instructions,
+    instructions: staticPrompt,
     tools,
     stopWhen: stepCountIs(60),
+    prepareStep: async ({ stepNumber }) => {
+      const pageContext = await fetchPageContext();
+      const now = new Date().toLocaleString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+
+      let dynamicBlock = `\n<current_context>\nDate: ${now}`;
+      if (pageContext) {
+        dynamicBlock += `\nPage URL: ${pageContext.url}\nPage Title: ${pageContext.title}`;
+      }
+      dynamicBlock += `\nStep: ${stepNumber}\n</current_context>`;
+
+      if (originalGoal && stepNumber > 2) {
+        dynamicBlock += `\n<user_goal>${originalGoal}</user_goal>`;
+      }
+
+      if (pageContext?.url) {
+        const skills = getSkillsForUrl(pageContext.url);
+        if (skills.length > 0) {
+          const skillText = skills.map((s) => `[${s.name}]\n${s.skill}`).join("\n\n");
+          dynamicBlock += `\n<domain_skills>\n${skillText}\n</domain_skills>`;
+        }
+      }
+
+      return { system: staticPrompt + dynamicBlock };
+    },
   });
 }

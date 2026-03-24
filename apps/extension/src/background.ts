@@ -176,6 +176,11 @@ const handlers: Record<string, (payload: any) => Promise<any>> = {
     return { dataUrl };
   },
 
+  async GET_TAB_INFO(payload: { _sourceTabId?: number }) {
+    const tab = await getSourceTab(payload);
+    return { url: tab.url ?? "", title: tab.title ?? "" };
+  },
+
   async GET_PAGE_CONTENT(payload: { _sourceTabId?: number }) {
     const tab = await getSourceTab(payload);
     return injectScript(tab.id!, () => ({

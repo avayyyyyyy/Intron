@@ -242,6 +242,10 @@ export function ChatMessage({
                 <img src={part.image} alt="User uploaded" />
               </div>
             );
+
+          case "task-list":
+            // Rendered by the floating TaskBar above the input — not inline
+            return null;
         }
       })}
 

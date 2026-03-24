@@ -990,6 +990,108 @@ body {
   border-left-color: var(--color-border);
 }
 
+@keyframes taskSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.task-spinner {
+  animation: taskSpin 1s linear infinite;
+}
+
+/* ─── Floating Task Bar (above input) ─────────────────────────────────── */
+
+.taskbar {
+  flex-shrink: 0;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  padding: var(--space-2) var(--space-3);
+  cursor: default;
+}
+
+.taskbar-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-fg-muted);
+}
+
+.taskbar-summary > svg {
+  flex-shrink: 0;
+  color: var(--color-highlight);
+}
+
+.taskbar-active {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-fg);
+}
+
+.taskbar-progress {
+  flex-shrink: 0;
+  font-size: var(--text-2xs);
+  color: var(--color-fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.taskbar-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 300ms ease;
+}
+
+.taskbar:hover .taskbar-expand {
+  grid-template-rows: 1fr;
+}
+
+.taskbar-expand-inner {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 0;
+  transition: padding-top 300ms ease;
+}
+
+.taskbar:hover .taskbar-expand-inner {
+  padding-top: var(--space-2);
+}
+
+.taskbar-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 0;
+  font-size: var(--text-2xs);
+  color: var(--color-fg-muted);
+}
+
+.taskbar-item-icon {
+  flex-shrink: 0;
+  display: flex;
+}
+
+.taskbar-item-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskbar-item.pending .taskbar-item-icon { color: var(--color-fg-subtle); }
+.taskbar-item.in_progress { color: var(--color-fg); }
+.taskbar-item.in_progress .taskbar-item-icon { color: var(--color-highlight); }
+.taskbar-item.completed .taskbar-item-icon { color: var(--color-success); }
+.taskbar-item.completed .taskbar-item-text { text-decoration: line-through; color: var(--color-fg-subtle); }
+.taskbar-item.interrupted .taskbar-item-icon { color: var(--color-destructive); }
+.taskbar-item.cancelled { opacity: 0.5; }
+.taskbar-item.cancelled .taskbar-item-text { text-decoration: line-through; }
+
 .citation {
   margin-top: var(--space-2);
   padding: var(--space-1) var(--space-2);

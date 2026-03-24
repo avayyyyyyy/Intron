@@ -78,3 +78,7 @@ export function getModelCapabilities(modelId: string): { vision: boolean } {
   const model = OPENROUTER_MODELS.find((m) => m.id === modelId);
   return { vision: model?.vision ?? false };
 }
+
+export function getModelName(modelId: string): string {
+  return OPENROUTER_MODELS.find((m) => m.id === modelId)?.name ?? modelId;
+}

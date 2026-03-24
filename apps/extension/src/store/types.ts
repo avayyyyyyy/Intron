@@ -19,6 +19,17 @@ export type MessagePart =
       toolCallId: string;
       toolName: string;
       error: string;
+    }
+  | {
+      type: "task-list";
+      sessionId: string;
+      overallStatus: "in_progress" | "completed";
+      tasks: Array<{
+        content: string;
+        status: "pending" | "in_progress" | "completed" | "interrupted" | "cancelled";
+        activeForm?: string;
+        statusContext?: string;
+      }>;
     };
 
 export interface Message {
@@ -50,6 +61,11 @@ export interface ChatStoreState {
     messageId: string,
     toolCallId: string,
     part: MessagePart,
+  ) => void;
+  updateTaskList: (
+    messageId: string,
+    sessionId: string,
+    part: Extract<MessagePart, { type: "task-list" }>,
   ) => void;
   setStreaming: (isStreaming: boolean) => void;
   setError: (error: string | null) => void;
