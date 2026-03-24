@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/avayyyyyyy/intron/stargazers"><img src="https://img.shields.io/github/stars/user/exten-agent?style=flat&color=orange" alt="GitHub stars" /></a>
+  <a href="https://github.com/avayyyyyyy/intron/"><img src="https://img.shields.io/github/stars/user/exten-agent?style=flat&color=orange" alt="GitHub stars" /></a>
   <a href="https://github.com/avayyyyyyy/intron/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
   <a href="https://openrouter.ai/"><img src="https://img.shields.io/badge/models-OpenRouter-blueviolet" alt="OpenRouter" /></a>
 </p>
