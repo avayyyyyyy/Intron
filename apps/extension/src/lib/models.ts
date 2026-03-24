@@ -102,6 +102,12 @@ export const OPENROUTER_MODELS: OpenRouterModel[] = [
     vision: false,
   },
   {
+    id: "minimax/minimax-m2.7",
+    name: "MiniMax M2.7",
+    description: "MiniMax latest",
+    vision: false,
+  },
+  {
     id: "minimax/minimax-m2.5",
     name: "MiniMax M2.5",
     description: "MiniMax, good for agents",
